@@ -1,0 +1,17 @@
+# Merging methods. Every one takes a LIST of task vectors, never a pair --
+# which is what makes the k-way experiment cheap.
+#
+# `methods` is read by config.merge_methods. Each named block below is passed
+# as **kwargs by merging.merge(), so the keys must match the function
+# signatures in merging.py.
+
+methods: [weight_averaging, task_arithmetic, ties]
+
+weight_averaging: {}          # theta_pre + mean(taus). No parameters.
+
+task_arithmetic:
+  alpha: 0.3                  # theta_pre + alpha * sum(taus)
+
+ties:
+  alpha: 0.3
+  density: 0.2                # trim: keep the top 20% of entries by magnitude

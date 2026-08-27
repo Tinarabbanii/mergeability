@@ -1,0 +1,39 @@
+seed: 0
+
+# Which subset sizes to merge and evaluate.
+#   2       -> the pairwise study (RQ1)
+#   3, 4    -> the k-way study (RQ2)
+k_values: [2, 3, 4]
+
+# Cap on subsets per k, read by pipeline.enumerate_subsets. With 5 tasks:
+# 10 pairs, 10 triples, 5 quads -- all small enough to run exhaustively, so
+# this is generous. Lower it if a run gets too slow.
+max_subsets_per_k: 40
+
+# Real-data evaluation only: subsample each test set for speed.
+eval_samples_per_task: 1000
+
+# Every key below matches a parameter in predict.py.
+predictor:
+  solver: lasso         # 'lasso'   coordinate descent, deterministic, ~1000x
+                        #           faster. Gives the same DIRECTION as
+                        #           maximising Pearson, because for a linear
+                        #           model with intercept the least-squares
+                        #           direction IS the correlation-maximising one.
+                        # 'pearson' the literal gradient maximiser, kept as a
+                        #           fidelity check. Very slow.
+  l1_lambda: 0.01       # Lasso alpha. Chosen from a PLATEAU (flat across
+                        # 0.003-0.1), not from the peak -- the peak is fitted to
+                        # this sample and will not transfer.
+  steps: 1200           # 'pearson' solver only; ignored by lasso. 1200 is where
+                        # held-out r stops drifting. At 600 it is NOT converged.
+  lr: 0.05              # 'pearson' solver only
+  n_restarts: 5         # 'pearson' solver only: the objective is non-convex, so
+                        # keep the best of 5 inits by TRAINING objective.
+
+reliability:
+  n_splits: 50          # split_half_reliability
+
+nulls:
+  n_random_trials: 20   # null_random_features and null_shuffled_target
+  n_bootstrap: 100      # bootstrap_r

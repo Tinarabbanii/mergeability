@@ -1,0 +1,33 @@
+# The five metric families of Demystifying Mergeability, section 3.
+#
+# `data_free` is what splits research question 1: the whole RQ1 result is the
+# gap between the data-free group and all five together.
+#
+# `enabled` is read by MetricComputer._enabled -- set one to false to drop that
+# family from every experiment without touching code.
+
+families:
+  geometry:    {section: "3.1", data_free: true,  enabled: true}
+  rank:        {section: "3.2", data_free: true,  enabled: true}
+  subspace:    {section: "3.3", data_free: true,  enabled: true}
+  activation:  {section: "3.4", data_free: false, enabled: true}
+  gradient:    {section: "3.5", data_free: false, enabled: true}
+
+# Read by MetricComputer.__init__ and _decomp_tv / _mats_tv.
+subspace:
+  top_k: 10             # paper uses k = 10
+  bottom_k: 10
+  singular_value_top: 100   # top-100 for the singular-value overlap metric
+  max_matrices: 64      # cap on how many 2-D weight matrices to SVD.
+                        # 0 = all of them. On ViT this is a large speedup, and
+                        # both models pick the same matrices because their
+                        # architectures are identical. It IS a deviation from
+                        # the paper, so state it in implementation details.
+
+# Read by MetricComputer.__init__ (rank_eps).
+rank:
+  eps: 1.0e-12          # numerical floor for the entropy log
+
+# Read by the backend when computing activation/gradient metrics.
+calibration:
+  samples_per_task: 10  # the paper's number, sections 3.4 and 3.5

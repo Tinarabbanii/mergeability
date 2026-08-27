@@ -1,0 +1,69 @@
+# Which tasks (= fine-tuned checkpoints) enter the study, per backend.
+#
+# `<backend>.tasks` is read by config.task_names.
+
+# --------------------------------------------------------------------------
+# SYNTHETIC -- generated models, no downloads, whole pipeline in seconds.
+# The test harness, NOT a source of findings.
+#
+# The values below were TUNED, not chosen. A first attempt with a wide hidden
+# layer, few classes and low noise gave every expert 100% accuracy and a
+# mergeability standard deviation of 0.004 -- every merge succeeded, so there
+# was nothing to predict and the test proved nothing. Mergeability has to VARY
+# for the pipeline test to mean anything.
+# --------------------------------------------------------------------------
+synthetic:
+  tasks: [t0, t1, t2, t3, t4, t5]
+
+  d_in: 32
+  d_hidden: 20        # deliberately tight. A bottleneck forces the merged
+                      # encoder to trade one task off against another, which is
+                      # what makes mergeability vary at all.
+  n_classes: 8
+  n_train: 600
+  n_test: 400
+  noise: 1.4          # class overlap. Higher -> harder tasks -> merging hurts.
+
+  # Each task's class centres are a blend of a SHARED basis and a task-private
+  # one. Two tasks with similar overlap values share more structure and should
+  # merge better. Without this spread every pair would be equally (un)mergeable.
+  shared_basis_dim: 16
+  task_overlap:
+    t0: 0.95
+    t1: 0.85
+    t2: 0.55
+    t3: 0.40
+    t4: 0.15
+    t5: 0.05
+
+  pretrain_steps: 300   # one shared backbone...
+  finetune_steps: 400   # ...then one fine-tuned descendant per task
+  finetune_lr: 0.05
+
+# --------------------------------------------------------------------------
+# CLIP -- the real benchmark. Every number in the report comes from here.
+# CLIP ViT-B/32 encoders released by Ilharco et al. (Task Arithmetic).
+# --------------------------------------------------------------------------
+clip:
+  model: ViT-B-32
+  checkpoint_url: https://github.com/mlfoundations/task_vectors
+
+  # Both paths accept an ABSOLUTE path, which is how you point at Kaggle's
+  # read-only /kaggle/input mounts without copying gigabytes around.
+  checkpoint_dir: checkpoints/ViT-B-32
+  data_root: data
+
+  # Only these parameters enter task vectors, metrics and merging. The
+  # checkpoints hold the whole CLIP model, but classification uses the image
+  # tower plus a separate head_<TASK>.pt, so the text tower never runs -- and it
+  # carries a constant zeroshot-vs-finetuned offset (norm ~0.070 for every task)
+  # that would put the same spurious component into every task vector.
+  param_prefix: "model.visual."
+
+  # Tasks whose TEST IMAGES are staged. Checkpoints and heads also exist for
+  # RESISC45 and Cars, but every dataset URL the task_vectors repo cites now
+  # returns 404/403, so they cannot be evaluated. Add them back the moment the
+  # images are staged -- task COUNT is what this study is short of:
+  #   5 tasks -> 10 pairs      7 tasks -> 21 pairs
+  #   6 tasks -> 15 pairs      8 tasks -> 28 pairs
+  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD]
