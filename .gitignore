@@ -1,0 +1,38 @@
+# --- NEVER COMMIT THESE ---------------------------------------------------
+
+# model weights: ~430 MB each, 3.4 GB total. GitHub rejects files over 100 MB.
+checkpoints/
+
+# downloaded datasets
+data/
+
+# generated results. Keeping them out is the reproducibility claim: a reviewer
+# should regenerate them, not download them.
+artifacts/
+
+# environments
+.venv/
+__pycache__/
+*.py[cod]
+
+# editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+.ipynb_checkpoints/
+
+# notebooks are for exploring, not for shipping. Anything that produces a
+# result belongs in a .py file that runs top to bottom.
+*.ipynb
+
+
+# --- DO COMMIT ------------------------------------------------------------
+# src/  scripts/  configs/  tests/  pyproject.toml  uv.lock  README.md
+#
+# figures/ are small PNGs and worth having visible on GitHub:
+!figures/
+!figures/*.png
+
+# editor / R noise
+.Rhistory
+README.html
