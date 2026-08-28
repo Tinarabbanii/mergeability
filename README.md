@@ -25,7 +25,7 @@ artifacts/       cached results
 figures/
 ```
 
-Every function takes a **list** of task vectors, never a pair, which is what makes the k-way question an afternoon rather than a rewrite.
+Every function takes a **list** of task vectors, never a pair, which is what makes the k-way question more efficient to answer.
 
 ## Run
 
