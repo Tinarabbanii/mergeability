@@ -46,8 +46,9 @@ class Config:
         return d / name
 
     def figure(self, name: str) -> Path:
-        FIGURES.mkdir(parents=True, exist_ok=True)
-        return FIGURES / name
+        d = FIGURES / self.backend
+        d.mkdir(parents=True, exist_ok=True)
+        return d / name
 
 
 def load_config(backend: str = "synthetic") -> Config:

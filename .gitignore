@@ -29,9 +29,15 @@ __pycache__/
 # --- DO COMMIT ------------------------------------------------------------
 # src/  scripts/  configs/  tests/  pyproject.toml  uv.lock  README.md
 #
-# figures/ are small PNGs and worth having visible on GitHub:
-!figures/
-!figures/*.png
+# figures/ are small PNGs and worth having visible on GitHub, but only the
+# CLIP ones are results. Synthetic figures are test-harness output and must
+# never sit in the repo looking like findings.
+#
+# NOTE: this excludes the CONTENTS (figures/*), not the directory (figures/).
+# Git refuses to descend into an excluded directory, so `figures/` followed by
+# `!figures/clip/` would silently ignore everything.
+figures/*
+!figures/clip/
 
 # editor / R noise
 .Rhistory
