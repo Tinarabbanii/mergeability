@@ -153,3 +153,10 @@ class SyntheticBackend:
         for name, p in enc.named_parameters():
             out[name] = p.grad.detach().clone() if p.grad is not None else torch.zeros_like(p)
         return out
+### Get backend
+def get_backend(cfg: Config) -> Backend:
+    if cfg.backend == "synthetic":
+        return SyntheticBackend(cfg)
+    if cfg.backend == "clip":
+        return ClipBackend(cfg)
+    raise ValueError(f"unknown backend {cfg.backend!r}")
