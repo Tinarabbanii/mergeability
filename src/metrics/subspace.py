@@ -40,7 +40,7 @@ def _alignment(a: torch.Tensor, b: torch.Tensor) -> float:
     k = min(a.shape[1], b.shape[1]) # 1 = Coincide
     if k == 0:
         return 0.0
-    return ((a[:, :k].T @ b[:, :k]).norm() ** 2 / k).item()
+    return ((a[:, :k].T @ b[:, :k]).norm() / k ** 0.5).item()
 
 def _interaction(a: torch.Tensor, b: torch.Tensor) -> float:
     k = min(a.shape[1], b.shape[1])
