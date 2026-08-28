@@ -47,7 +47,7 @@ def sd_sum(dicts: list[StateDict]) -> StateDict: # Merging k models
     for name in dicts[0]:
         total = torch.zeros_like(dicts[0][name]) # Tensor of 0s with same shape as our task vec
         for d in dicts:
-            total = total total + d[name]
+            total = total + d[name]
         out[name] = total
     return out
 
