@@ -158,5 +158,5 @@ def get_backend(cfg: Config) -> Backend:
     if cfg.backend == "synthetic":
         return SyntheticBackend(cfg)
     if cfg.backend == "clip":
-        return ClipBackend(cfg)
+        raise NotImplementedError("clip backend not written yet; use --backend synthetic")
     raise ValueError(f"unknown backend {cfg.backend!r}")
