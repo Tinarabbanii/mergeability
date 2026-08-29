@@ -153,10 +153,111 @@ class SyntheticBackend:
         for name, p in enc.named_parameters():
             out[name] = p.grad.detach().clone() if p.grad is not None else torch.zeros_like(p)
         return out
+
+### CLIP bechmark
+class ClipBackend:
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        spec = cfg.tasks["clip"]
+        self.task_names = list(spec["tasks"])
+        self.device = get_device()
+        self.ckpt_dir = (__import__("pathlib").Path(cfg.tasks["clip"]["checkpoint_dir"]))
+        if not self.ckpt_dir.is_absolute():
+            from .config import ROOT
+            self.ckpt_dir = ROOT / self.ckpt_dir
+        self._cache: dict[str, StateDict] = {}
+        self._eval_cache: dict[str, tuple] = {}
+
+    def _load(self, filename: str) -> StateDict:
+        if filename in self._cache:
+            return self._cache[filename]
+        path = self.ckpt_dir / filename
+        if not path.exists():
+            raise FileNotFoundError(
+                f"missing checkpoint {path}\n"
+                f"run: python scripts/download_checkpoints.py")
+        obj = torch.load(path, map_location="cpu", weights_only=False)
+        sd = obj.state_dict() if hasattr(obj, "state_dict") else obj
+        sd = {k: v.float() for k, v in sd.items() if torch.is_floating_point(v)}
+        prefix = self.cfg.tasks["clip"].get("param_prefix", "")
+        if prefix:
+            sd = {k: v for k, v in sd.items() if k.startswith(prefix)}
+            if not sd:
+                raise RuntimeError(
+                    f"no parameters matched prefix {prefix!r} in {path.name}; "
+                    f"check configs/tasks.yaml:clip.param_prefix")
+        self._cache[filename] = sd
+        return sd
+
+    def pretrained(self) -> StateDict:
+        return self._load("zeroshot.pt")
+
+    def finetuned(self, task: str) -> StateDict:
+        return self._load(f"{task}.pt")
+
+    def _eval_assets(self, task: str):
+        if task in self._eval_cache:
+            return self._eval_cache[task]
+        from .clip_assets import build_eval_assets
+        assets = build_eval_assets(self.cfg, task, self.ckpt_dir, self.device)
+        self._eval_cache[task] = assets
+        return assets
+
+    @torch.no_grad()
+    def evaluate(self, encoder_sd: StateDict, task: str) -> float:
+        encoder, head, loader = self._eval_assets(task)
+        encoder.load_state_dict(encoder_sd, strict=False)
+        encoder.eval().to(self.device)
+        correct = total = 0
+        for x, y in loader:
+            x, y = x.to(self.device), y.to(self.device)
+            logits = head(encoder(x))
+            correct += (logits.argmax(dim=1) == y).sum().item()
+            total += y.numel()
+        return correct / max(total, 1)
+
+    @torch.no_grad()
+    def activations(self, encoder_sd: StateDict, task: str) -> torch.Tensor:
+        encoder, _, loader = self._eval_assets(task)
+        encoder.load_state_dict(encoder_sd, strict=False)
+        encoder.eval().to(self.device)
+        n = int(self.cfg.metrics["calibration"]["samples_per_task"])
+        feats = []
+        seen = 0
+        for x, _ in loader:
+            x = x.to(self.device)
+            feats.append(encoder(x).float().cpu())
+            seen += x.shape[0]
+            if seen >= n:
+                break
+        return torch.cat(feats)[:n].mean(dim=0)
+
+    def gradients(self, encoder_sd: StateDict, task: str) -> StateDict:
+        encoder, head, loader = self._eval_assets(task)
+        encoder.load_state_dict(encoder_sd, strict=False)
+        encoder.train().to(self.device)
+        n = int(self.cfg.metrics["calibration"]["samples_per_task"])
+        xs, ys = [], []
+        seen = 0
+        for x, y in loader:
+            xs.append(x); ys.append(y); seen += x.shape[0]
+            if seen >= n:
+                break
+        x = torch.cat(xs)[:n].to(self.device)
+        y = torch.cat(ys)[:n].to(self.device)
+        loss = F.cross_entropy(head(encoder(x)), y)
+        encoder.zero_grad()
+        loss.backward()
+        out: StateDict = {}
+        for name, p in encoder.named_parameters():
+            out[name] = (p.grad.detach().float().cpu().clone()
+                         if p.grad is not None else torch.zeros_like(p).cpu())
+        return out
+
 ### Get backend
 def get_backend(cfg: Config) -> Backend:
     if cfg.backend == "synthetic":
         return SyntheticBackend(cfg)
     if cfg.backend == "clip":
-        raise NotImplementedError("clip backend not written yet; use --backend synthetic")
+        return ClipBackend(cfg)
     raise ValueError(f"unknown backend {cfg.backend!r}")
