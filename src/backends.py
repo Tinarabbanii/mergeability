@@ -167,6 +167,7 @@ class ClipBackend:
             self.ckpt_dir = ROOT / self.ckpt_dir
         self._cache: dict[str, StateDict] = {}
         self._eval_cache: dict[str, tuple] = {}
+        self._encoder = None
 
     def _load(self, filename: str) -> StateDict:
         if filename in self._cache:
@@ -195,18 +196,32 @@ class ClipBackend:
     def finetuned(self, task: str) -> StateDict:
         return self._load(f"{task}.pt")
 
+    def _encoder_once(self):
+        if self._encoder is None:
+            from .clip_assets import build_encoder
+            self._encoder = build_encoder(self.cfg, self.device)
+        return self._encoder
+
     def _eval_assets(self, task: str):
-        if task in self._eval_cache:
-            return self._eval_cache[task]
-        from .clip_assets import build_eval_assets
-        assets = build_eval_assets(self.cfg, task, self.ckpt_dir, self.device)
-        self._eval_cache[task] = assets
-        return assets
+        encoder = self._encoder_once()
+        if task not in self._eval_cache:
+            from .clip_assets import build_eval_assets
+            self._eval_cache[task] = build_eval_assets(
+                self.cfg, task, self.ckpt_dir, self.device, encoder)
+        head, loader = self._eval_cache[task]
+        return encoder, head, loader
+
+    def _load_into(self, encoder, encoder_sd: StateDict) -> None:
+        result = encoder.load_state_dict(encoder_sd, strict=False)
+        if result.unexpected_keys:
+            raise RuntimeError(
+                f"{len(result.unexpected_keys)} checkpoint keys have no match in the "
+                f"encoder (e.g. {result.unexpected_keys[:3]}). Nothing was loaded.")
 
     @torch.no_grad()
     def evaluate(self, encoder_sd: StateDict, task: str) -> float:
         encoder, head, loader = self._eval_assets(task)
-        encoder.load_state_dict(encoder_sd, strict=False)
+        self._load_into(encoder, encoder_sd)
         encoder.eval().to(self.device)
         correct = total = 0
         for x, y in loader:
@@ -219,7 +234,7 @@ class ClipBackend:
     @torch.no_grad()
     def activations(self, encoder_sd: StateDict, task: str) -> torch.Tensor:
         encoder, _, loader = self._eval_assets(task)
-        encoder.load_state_dict(encoder_sd, strict=False)
+        self._load_into(encoder, encoder_sd)
         encoder.eval().to(self.device)
         n = int(self.cfg.metrics["calibration"]["samples_per_task"])
         feats = []
@@ -234,7 +249,7 @@ class ClipBackend:
 
     def gradients(self, encoder_sd: StateDict, task: str) -> StateDict:
         encoder, head, loader = self._eval_assets(task)
-        encoder.load_state_dict(encoder_sd, strict=False)
+        self._load_into(encoder, encoder_sd)
         encoder.train().to(self.device)
         n = int(self.cfg.metrics["calibration"]["samples_per_task"])
         xs, ys = [], []
@@ -248,8 +263,11 @@ class ClipBackend:
         loss = F.cross_entropy(head(encoder(x)), y)
         encoder.zero_grad()
         loss.backward()
+        prefix = self.cfg.tasks["clip"].get("param_prefix", "")
         out: StateDict = {}
         for name, p in encoder.named_parameters():
+            if prefix and not name.startswith(prefix):
+                continue
             out[name] = (p.grad.detach().float().cpu().clone()
                          if p.grad is not None else torch.zeros_like(p).cpu())
         return out
