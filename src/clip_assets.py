@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Dataset, Subset
 from .config import ROOT
 
 ### Encoder
@@ -54,8 +54,19 @@ TORCHVISION_TASKS = {
     "SVHN": ("SVHN", dict(split="test", download=True)),
     "DTD": ("DTD", dict(split="test", download=True)),
     "EuroSAT": ("EuroSAT", dict(download=True)),
-    "GTSRB": ("GTSRB", dict(split="test", download=True)),
-}
+    "GTSRB": ("GTSRB", dict(split="test", download=True)),}
+
+HF_TASKS = {
+    "RESISC45": "hf://datasets/tanganke/resisc45/data/test-*.parquet",
+    "Cars":     "hf://datasets/tanganke/stanford_cars/data/test-*.parquet",}
+class _HFDataset(Dataset):
+    def __init__(self, ds, transform):
+        self.ds, self.transform = ds, transform
+    def __len__(self) -> int:
+        return len(self.ds)
+    def __getitem__(self, i):
+        row = self.ds[i]
+        return self.transform(row["image"].convert("RGB")), row["label"]
 
 def build_loader(cfg, task: str, preprocess, batch_size: int = 64):
     import torchvision.datasets as tvd
@@ -65,15 +76,22 @@ def build_loader(cfg, task: str, preprocess, batch_size: int = 64):
     if not data_root.is_absolute():
         data_root = ROOT / data_root
     data_root.mkdir(parents=True, exist_ok=True)
-    if task not in TORCHVISION_TASKS:
+    if task in HF_TASKS:
+        local = data_root / "hf" / task
+        if local.exists():
+            from datasets import load_from_disk
+            hf = load_from_disk(str(local))
+        else:
+            from datasets import load_dataset
+            hf = load_dataset("parquet", data_files=HF_TASKS[task], split="train")
+        ds = _HFDataset(hf, preprocess)
+    elif task in TORCHVISION_TASKS:
+        name, kwargs = TORCHVISION_TASKS[task]
+        ds = getattr(tvd, name)(root=str(data_root), transform=preprocess, **kwargs)
+    else:
         raise NotImplementedError(
-            f"no loader for {task!r}. torchvision covers "
-            f"{sorted(TORCHVISION_TASKS)}. For RESISC45/Cars/SUN397 either stage the "
-            f"data yourself and add a branch here, or drop the task from "
-            f"configs/tasks.yaml:clip.tasks -- dropping is usually the right call, "
-            f"since task COUNT matters more to this study than task identity.")
-    name, kwargs = TORCHVISION_TASKS[task]
-    ds = getattr(tvd, name)(root=str(data_root), transform=preprocess, **kwargs)
+            f"no loader for {task!r}. torchvision: {sorted(TORCHVISION_TASKS)}; "
+            f"HuggingFace: {sorted(HF_TASKS)}.")
     if len(ds) > n:
         g = torch.Generator().manual_seed(cfg.seed)
         idx = torch.randperm(len(ds), generator=g)[:n].tolist()

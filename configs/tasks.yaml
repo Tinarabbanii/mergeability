@@ -66,4 +66,4 @@ clip:
   # images are staged -- task COUNT is what this study is short of:
   #   5 tasks -> 10 pairs      7 tasks -> 21 pairs
   #   6 tasks -> 15 pairs      8 tasks -> 28 pairs
-  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD]
+  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD, RESISC45, Cars]
