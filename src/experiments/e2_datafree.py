@@ -43,7 +43,7 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
             result[f"{kind}_n_features"] = len(cols)
 
         free_r, full_r = result["data_free_r"], result["full_r"]
-        result["retention"] = (free_r / full_r) if (full_r and abs(full_r) > 1e-9) else np.nan
+        result["retention"] = (free_r / full_r) if (full_r > 1e-9 and free_r > 0) else np.nan
         rows.append(result)
 
         print(f"  {method:<18} data-free r={free_r:+.3f}  "
