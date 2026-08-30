@@ -7,7 +7,7 @@ from .config import ROOT
 
 ### Encoder
 class ClipImageEncoder(nn.Module):
-    def __init__(self, model_name: str = "ViT-B-32", pretrained: str = "openai"):
+    def __init__(self, model_name: str = "ViT-B-32", pretrained: str | None = None):
         super().__init__()
         try:
             import open_clip
@@ -78,11 +78,12 @@ def build_loader(cfg, task: str, preprocess, batch_size: int = 64):
         g = torch.Generator().manual_seed(cfg.seed)
         idx = torch.randperm(len(ds), generator=g)[:n].tolist()
         ds = Subset(ds, idx)
-    return DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=2)
+    import sys
+    workers = 0 if sys.platform == "darwin" else 2
+    return DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=workers)
 
-def build_eval_assets(cfg, task: str, ckpt_dir: Path, device):
+def build_eval_assets(cfg, task: str, ckpt_dir: Path, device, encoder):
     head = build_head(task, ckpt_dir, device)
-    encoder = build_encoder(cfg, device)
     loader = build_loader(cfg, task, encoder.preprocess)
 # Check
     with torch.no_grad():
@@ -92,4 +93,4 @@ def build_eval_assets(cfg, task: str, ckpt_dir: Path, device):
         raise RuntimeError(
             f"{task}: encoder outputs {feature_dim} features but head_{task}.pt "
             f"expects {head.in_features}. Wrong CLIP variant?")
-    return encoder, head, loader
+    return head, loader
