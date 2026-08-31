@@ -3,6 +3,15 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
+L1_FITS = {"fits": 0, "fallbacks": 0}
+def fallback_report(label: str = "") -> str:
+    n, f = L1_FITS["fits"], L1_FITS["fallbacks"]
+    if not f:
+        return f"  L1 fallback: never fired ({n} fits) -- OK"
+    pct = 100.0 * f / max(n, 1)
+    flag = "  <-- ABOVE 0.5%, INVESTIGATE" if pct > 0.5 else "  (baseline 0.033%, fine)"
+    return f"  L1 fallback fired {f}/{n} fits ({pct:.3f}%){flag}{label}"
+
 ### Pearson correlation
 def pearson(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a = a - a.mean()
@@ -42,8 +51,17 @@ def _fit_lasso(x: np.ndarray, y: np.ndarray, feature_names: list[str], l1_lambda
         model = Lasso(alpha=l1_lambda, fit_intercept=True, max_iter=50000, tol=1e-4)
         model.fit(x, ys)
     w = np.asarray(model.coef_, dtype=float)
+    L1_FITS["fits"] += 1
 
     if np.linalg.norm(w) < 1e-12:
+        L1_FITS["fallbacks"] += 1
+        import warnings
+        warnings.warn(
+            f"Lasso(alpha={l1_lambda}) zeroed all {x.shape[1]} coefficients; "
+            f"falling back to marginal correlations, which is a different "
+            f"estimator. Lower l1_lambda if you see this.",
+            RuntimeWarning, stacklevel=2,
+        )
         w = np.array([
             np.corrcoef(x[:, j], ys)[0, 1] if np.std(x[:, j]) > 1e-12 else 0.0
             for j in range(x.shape[1])
@@ -121,7 +139,8 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
     groups: list[str] | None = None,
     n_restarts: int = 5,
     solver: str = "lasso",) -> dict:
-    held_pred = np.full(len(y), np.nan)
+    held_sum = np.zeros(len(y), dtype=float)
+    held_cnt = np.zeros(len(y), dtype=float)
     fold_r: list[float] = []
     fold_weights: list[np.ndarray] = []
 
@@ -142,13 +161,16 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
         fit = fit_linear_l1(xtr, y[tr_idx], names, l1_lambda, steps, lr,
                             seed, n_restarts, solver)
         pred = xva @ fit.weights
-        held_pred[val_idx] = pred
+        held_sum[val_idx] += pred
+        held_cnt[val_idx] += 1
         fold_weights.append(fit.weights)
 
         if len(val_idx) >= 3 and np.std(pred) > 1e-12 and np.std(y[val_idx]) > 1e-12:
             fold_r.append(float(np.corrcoef(pred, y[val_idx])[0, 1]))
 
-    mask = ~np.isnan(held_pred)
+    mask = held_cnt > 0
+    held_pred = np.full(len(y), np.nan)
+    held_pred[mask] = held_sum[mask] / held_cnt[mask]
     if mask.sum() >= 3 and np.std(held_pred[mask]) > 1e-12:
         pooled = float(np.corrcoef(held_pred[mask], y[mask])[0, 1])
     else:
@@ -207,6 +229,7 @@ def null_shuffled_target(
 def split_half_reliability(
     subsets, x, y, feature_names, tasks, n_splits: int = 50, **kw
 ) -> dict:
+    del subsets, tasks
     from scipy.stats import spearmanr
     seed = int(kw.get("seed", 0))
     rng = np.random.default_rng(seed)

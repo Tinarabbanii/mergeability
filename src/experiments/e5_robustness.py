@@ -38,8 +38,12 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
         ci = bootstrap_r(subsets, x, y, cols, cfg.task_names, n_boot=int(cfg.eval["nulls"].get("n_bootstrap", 200)), **dict(kw))
         groups = [mc.family_of(c) for c in cols]
         g_obs = loto_evaluate(subsets, x, y, cols, cfg.task_names, groups=groups, **kw)["pooled_r"]
-        g_null = null_random_features(subsets, y, cfg.task_names, len(cols), n_trials=n_trials, groups=groups, **dict(kw))
-        g_clears = g_obs > g_null["p95"]
+        g_n1 = null_random_features(subsets, y, cfg.task_names, len(cols),
+                                    n_trials=n_trials, groups=groups, **dict(kw))
+        g_n2 = null_shuffled_target(subsets, x, y, cols, cfg.task_names,
+                                    n_trials=n_trials, groups=groups, **dict(kw))
+        g_null_p95 = max(g_n1["p95"], g_n2["p95"])
+        g_clears = g_obs > g_null_p95
 
         rows.append({
             "method": method, "n_features": len(cols), "observed_r": observed,
@@ -48,7 +52,7 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
             "null_shuffled_mean": n2["mean"], "null_shuffled_p95": n2["p95"],
             "clears_both_nulls": bool(clears),
             "grouped_n_features": len(set(groups)),
-            "grouped_r": g_obs, "grouped_null_p95": g_null["p95"],
+            "grouped_r": g_obs, "grouped_null_p95": g_null_p95,
             "grouped_clears": bool(g_clears),
         })
         print(f"  {method:<18} observed={observed:+.3f} "
@@ -56,7 +60,7 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
               f"nulls p95={n1['p95']:+.3f}/{n2['p95']:+.3f}   "
               f"{'CLEARS' if clears else 'AT CHANCE'}")
         print(f"  {'':<18} grouped ({len(set(groups))} params): r={g_obs:+.3f}   "
-              f"null p95={g_null['p95']:+.3f}   "
+              f"null p95={g_null_p95:+.3f}   "
               f"{'CLEARS' if g_clears else 'AT CHANCE'}")
 
     out = pd.DataFrame(rows)
@@ -70,10 +74,13 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
         print(f"  {n_g}/{len(out)} clear with "
               f"{out.grouped_n_features.iloc[0]} family-level features.")
         if n_g > n_clear:
-            print("  -> grouping metrics into families BUYS statistical power: "
-                  "fewer free parameters, lower null, same signal.")
+            print("  -> grouping raised the number of methods clearing chance.")
+        elif n_g == n_clear:
+            print("  -> grouping did not change which methods clear; compare the "
+                  "margins in the CSV to see whether it widened them.")
         if n_clear == 0:
-            print("  Every result is at chance. Report that plainly, it is a "
-                  "finding about how little signal 15 points can carry, not a bug.")
+            print(f"  Every result is at chance. Report that plainly, it is a "
+                  f"finding about how little signal {len(df)} points can carry, "
+                  f"not a bug.")
     print(f"  -> {path}")
     return out
