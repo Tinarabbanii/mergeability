@@ -20,16 +20,18 @@ def task_arithmetic(theta_pre: StateDict, taus: list[StateDict], alpha: float = 
 
 def ties(theta_pre: StateDict, taus: list[StateDict], alpha: float = 0.3, density: float = 0.2, **kw) -> StateDict:
     merged = sd_clone(theta_pre)
-
+    layer_names = sorted(merged)
+    thresholds = []
+    for t in taus:
+        v = torch.cat([t[n].float().flatten() for n in layer_names])
+        n_keep = max(1, int(round(density * v.numel())))
+        thresholds.append(torch.tensor(0.0) if n_keep >= v.numel()
+                          else v.abs().kthvalue(v.numel() - n_keep + 1).values)
+    thr_vec = torch.stack(thresholds)
     for name in merged:
-        stack = torch.stack([t[name].float() for t in taus])  # (k, ...)
-### TRIM
-        flat = stack.reshape(stack.shape[0], -1)
-        n_keep = max(1, int(round(density * flat.shape[1])))
-        if n_keep < flat.shape[1]:
-            thresh = flat.abs().kthvalue(flat.shape[1] - n_keep + 1, dim=1, keepdim=True).values
-            flat = torch.where(flat.abs() >= thresh, flat, torch.zeros_like(flat))
-        trimmed = flat.reshape(stack.shape)
+        stack = torch.stack([t[name].float() for t in taus])  # (k, *shape)
+        thr = thr_vec.reshape(-1, *([1] * (stack.dim() - 1)))  # broadcast over the layer
+        trimmed = torch.where(stack.abs() >= thr, stack, torch.zeros_like(stack))
 ### ELECT
         elected = torch.sign(trimmed.sum(dim=0))
 

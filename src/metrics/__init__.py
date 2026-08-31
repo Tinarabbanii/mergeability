@@ -38,8 +38,16 @@ class MetricComputer:
         if self._enabled("rank"):
             names += ["eff_rank_global", "eff_rank_layerwise"]
         if self._enabled("subspace"):
+            # sub_interact_* are excluded from the predictor. In THIS implementation
+            # _interaction() and _alignment() come out numerically equivalent
+            # (r = 0.998 across all task pairs, CLIP ViT-B/32), so including both
+            # spends two of only ~21 degrees of freedom on one piece of information.
+            # Whether that equivalence reflects the paper's intent or a misreading
+            # of section 3.3 is an open question, put to the authors. The columns
+            # remain in metrics.csv either way, so nothing needs recomputing if the
+            # answer is that the interaction matrix should be formed differently.
             names += ["sub_sv_overlap", "sub_left_top", "sub_right_top",
-                      "sub_right_bot", "sub_interact_top", "sub_interact_bot"]
+                      "sub_right_bot"]
         return names
 ### Data-dependent
     def data_dependent_metric_names(self) -> list[str]:

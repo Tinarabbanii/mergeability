@@ -35,5 +35,5 @@ reliability:
   n_splits: 50          # split_half_reliability
 
 nulls:
-  n_random_trials: 20   # null_random_features and null_shuffled_target
+  n_random_trials: 200   # null_random_features and null_shuffled_target
   n_bootstrap: 100      # bootstrap_r
