@@ -31,6 +31,9 @@ def main() -> None:
         fn()
     print("\n" + "=" * 74)
     make_all(cfg)
+    from src.predict import fallback_report
+    print("\n" + "=" * 74)
+    print(fallback_report())
     print(f"\ntotal: {time.time() - t0:.1f}s")
 if __name__ == "__main__":
     main()

@@ -1,5 +1,4 @@
 """Figure generation. One figure per claim.
-
     fig1  expert accuracy and task vector norm             (from e0)
     fig2  distribution of post-merge accuracy by k, method (from e1)
     fig3  RQ1 HEADLINE: data-free vs full predictor        (from e2)
@@ -7,39 +6,16 @@
     fig5  split-half reliability                           (from e3)
     fig6  RQ2: which aggregator predicts k-way             (from e4)
     fig7  observed r against both null baselines           (from e5)
-    fig8  RQ2's control: pairwise vs the additive baseline (from e4)
-
-Every figure is regenerated from the cached CSVs, so make_figures.py never
-re-runs an experiment. A missing CSV skips that figure instead of crashing.
-
-DESIGN RULES, applied to all eight:
-
-  * HORIZONTAL bars whenever the category labels are long. Rotated x-labels are
-    the commonest source of an unreadable plot; turning the chart sideways
-    removes the problem instead of shrinking the font until it fits.
-  * Every bar carries its own value. A reader should never have to measure a
-    bar against an axis to know what it says.
-  * Colour is SEMANTIC and consistent across the whole set: data-free is always
-    blue, the full/comparison series always coral, nulls and baselines always
-    grey. The same colour means the same thing in every figure.
-  * Gridlines behind the data, one axis only, very light.
-  * Left-aligned title with a grey subtitle carrying the interpretation, so a
-    figure can be read without the caption.
-  * Nothing is ever drawn on top of anything else. Legends get a narrow
-    reserved band under the bars (_room); labels on reference lines are pinned
-    inside the axes (_note).
-"""
+    fig8  RQ2's control: pairwise vs the additive baseline (from e4)"""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
-
 from .config import Config  # noqa: E402
 
 # --------------------------------------------------------------------------- #
@@ -92,15 +68,13 @@ def _save(fig, cfg: Config, name: str) -> None:
     plt.close(fig)
     print(f"  -> {path}")
 
-
 def _read(cfg: Config, name: str) -> pd.DataFrame | None:
     p = cfg.artifact(name)
     return pd.read_csv(p) if p.exists() else None
 
 
 def _title(ax, title: str, subtitle: str = "") -> None:
-    """Left-aligned title with an optional grey interpretation line."""
-    ax.set_title(title, loc="left", pad=15 if subtitle else 8,
+    ax.set_title(title, loc="left", pad=18 if subtitle else 8,
                  fontweight="bold", color=INK)
     if subtitle:
         ax.text(0, 1.012, subtitle, transform=ax.transAxes, ha="left", va="bottom",
@@ -108,9 +82,6 @@ def _title(ax, title: str, subtitle: str = "") -> None:
 
 
 def _figtitle(fig, title: str, subtitle: str = "") -> None:
-    """Figure-level title. Two separate texts with explicit vertical anchors --
-    suptitle + fig.text at hand-picked y values collide as soon as the figure
-    height changes."""
     fig.text(0.008, 1.075, title, ha="left", va="bottom",
              fontsize=11.5, fontweight="bold", color=INK)
     if subtitle:
@@ -124,33 +95,19 @@ def _grid(ax, axis: str = "y") -> None:
 
 
 def _room(ax, n: int, rows: float = 0.55) -> None:
-    """Reserve a narrow empty band below the bars of a horizontal chart.
-
-    Without this, a legend at "lower right" lands on the last bar and its value
-    label. Extending the limit is better than moving the legend outside: the
-    figure keeps its rectangle and the legend stays next to what it explains.
-    0.55 of a row is the smallest band that still clears a two-line legend.
-    """
     ax.set_ylim(-0.5 - rows, n - 0.5)
 
 
 def _note(ax, x: float, text: str, color=MUTED) -> None:
-    """Label a vertical reference line, pinned just INSIDE the top of the axes.
-
-    Data coordinates on x, axes fraction on y, so the label cannot drift above
-    the axes and collide with the title however the y limits are set.
-    """
     ax.text(x, 0.985, text, transform=ax.get_xaxis_transform(),
             ha="left", va="top", fontsize=8, color=color)
 
 
 def _pretty(name: str) -> str:
-    """weight_averaging -> Weight averaging"""
     return name.replace("_", " ").capitalize()
 
 
 def _short(name: str) -> str:
-    """weight_averaging -> Weight"""
     return _pretty(name).split()[0]
 
 
@@ -160,7 +117,6 @@ def _no_yticks(ax) -> None:
 
 
 def _label_barh(ax, bars, values, fmt="{:+.2f}", pad=0.012) -> None:
-    """Value at the end of each horizontal bar, outside and on the correct side."""
     span = max((abs(v) for v in values if not np.isnan(v)), default=1.0) or 1.0
     for bar, v in zip(bars, values):
         if np.isnan(v):
@@ -181,6 +137,17 @@ def _label_barv(ax, bars, values, fmt="{:.2f}") -> None:
 
 
 # =========================================================================== #
+def _cleared_methods(cfg: Config, name: str = "e5_nulls_k2.csv") -> set | None:
+    """Methods whose observed correlation beat BOTH null baselines, from e5.
+
+    fig3 draws e2's correlations, but only e5 knows which of them are real.
+    Returns None when e5 has not been run, so fig3 still renders standalone.
+    """
+    d = _read(cfg, name)
+    if d is None or d.empty or "clears_both_nulls" not in d:
+        return None
+    return set(d.loc[d.clears_both_nulls.astype(bool), "method"])
+
 def fig1_setup(cfg: Config) -> None:
     """Expert accuracy and task-vector norm per task."""
     df = _read(cfg, "e0_sanity.csv")
@@ -239,8 +206,6 @@ def fig2_merge_quality(cfg: Config) -> None:
                            capprops=dict(color="#B4BCC2", lw=1))
         for patch, c in zip(parts["boxes"], colours):
             patch.set_facecolor(c); patch.set_alpha(0.75); patch.set_edgecolor("none")
-
-        # jittered raw points: the boxes hide how few subsets there are
         rng = np.random.default_rng(0)
         for i, vals in enumerate(data, start=1):
             ax.scatter(rng.normal(i, 0.055, len(vals)), vals, s=9,
@@ -271,24 +236,39 @@ def fig3_datafree(cfg: Config) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(9.8, 0.80 * len(df) + 2.2),
                              gridspec_kw={"width_ratios": [1.25, 1]})
 
-    b1 = axes[0].barh(y + h / 2, df.full_r, h, color=CORAL, zorder=3,
+    # Which methods actually beat their null? e5 knows; e2 does not. Without this,
+    # a method whose correlation is indistinguishable from noise gets the same
+    # solid bar as one that clears chance, and fig3 contradicts fig7.
+    cleared = _cleared_methods(cfg)
+    solid = [m in cleared for m in df.method] if cleared is not None else [True] * len(df)
+
+    b1 = axes[0].barh(y + h / 2, df.full_r, h, zorder=3,
+                      color=[CORAL if s else FAINT for s in solid],
                       label="full (all five families)")
-    b2 = axes[0].barh(y - h / 2, df.data_free_r, h, color=BLUE, zorder=3,
+    b2 = axes[0].barh(y - h / 2, df.data_free_r, h, zorder=3,
+                      color=[BLUE if s else FAINT for s in solid],
                       label="data-free (weights only)")
     axes[0].set_yticks(y); axes[0].set_yticklabels([_pretty(m) for m in df.method])
     axes[0].tick_params(axis="y", length=0)
     axes[0].set_xlabel("held-out correlation  r  (leave-one-task-out)")
-    axes[0].set_xlim(0, max(df.full_r.max(), df.data_free_r.max()) * 1.24)
+    lo = min(0.0, df.full_r.min(), df.data_free_r.min()) * 1.30
+    axes[0].set_xlim(lo, max(df.full_r.max(), df.data_free_r.max()) * 1.24)
     _room(axes[0], len(df))
     axes[0].legend(loc="lower right")
     _grid(axes[0], "x")
     _label_barh(axes[0], b1, df.full_r.tolist(), "{:.2f}")
     _label_barh(axes[0], b2, df.data_free_r.tolist(), "{:.2f}")
-    _title(axes[0], "Predictive power", "higher is better;  1.0 = perfect prediction")
+    sub = "higher is better;  1.0 = perfect prediction"
+    if cleared is not None and not all(solid):
+        sub += ";  grey = does not clear its null"
+    _title(axes[0], "Predictive power", sub)
 
     pct = 100 * df.retention
-    bars = axes[1].barh(y, pct, 0.58, color=[BLUE if p >= 80 else SAND for p in pct],
-                        zorder=3)
+    # retention is a ratio of two correlations; it is only meaningful when the
+    # underlying correlation is itself distinguishable from noise.
+    bars = axes[1].barh(y, pct, 0.58, zorder=3,
+                        color=[(BLUE if p >= 80 else SAND) if s else FAINT
+                               for p, s in zip(pct, solid)])
     axes[1].axvline(100, ls=(0, (4, 3)), c=GREY, lw=1.2, zorder=1)
     axes[1].set_yticks(y); _no_yticks(axes[1])
     axes[1].set_xlabel("% of full-metric power retained")
@@ -297,7 +277,10 @@ def fig3_datafree(cfg: Config) -> None:
     _note(axes[1], 100, "  no loss")
     _grid(axes[1], "x")
     _label_barh(axes[1], bars, pct.tolist(), "{:.0f}%")
-    _title(axes[1], "Retention", "what you keep by dropping the data")
+    sub2 = "what you keep by dropping the data"
+    if cleared is not None and not all(solid):
+        sub2 += ";  grey bars rest on a null result"
+    _title(axes[1], "Retention", sub2)
 
     fig.tight_layout(w_pad=2.4)
     _save(fig, cfg, "fig3_datafree.png")
@@ -317,8 +300,6 @@ def fig4_importance(cfg: Config) -> None:
                                     0.36 * len(piv) + 2.1))
     im = ax.imshow(m, cmap=DIVERGING, vmin=-v, vmax=v, aspect="auto")
 
-    # every cell is annotated. A blank cell reads as missing data; an explicit
-    # faint 0 reads as "the L1 penalty dropped this metric", which is the point.
     for i in range(m.shape[0]):
         for j in range(m.shape[1]):
             val = m[i, j]
@@ -405,8 +386,6 @@ def fig6_kway(cfg: Config) -> None:
     aggs = [("mean", BLUE), ("min", CORAL), ("max", SAND)]
     h = 0.24
 
-    # horizontal, so the six method/k labels get their own row each and the
-    # three value labels per row can never collide the way stacked x-ticks did
     for ax, (df, tag, sub) in zip(axes, panels):
         y = np.arange(len(df))[::-1]          # first row at the top
         for off, (name, c) in zip((h, 0, -h), aggs):
@@ -442,7 +421,6 @@ def fig7_nulls(cfg: Config) -> None:
 
     fig, ax = plt.subplots(figsize=(8.6, 1.0 * len(df) + 2.2))
 
-    # nulls as a shaded "chance band" behind each row, not competing bars
     for i, row in df.reset_index().iterrows():
         hi = max(row.get("null_random_p95", 0), row.get("null_shuffled_p95", 0))
         ax.barh(i, hi, 0.72, color=GREY, alpha=0.45, zorder=2)
@@ -463,24 +441,46 @@ def fig7_nulls(cfg: Config) -> None:
     for i, (v, ok) in enumerate(zip(df.observed_r, clears)):
         ax.scatter(v, i, s=26, zorder=6, color=BLUE if ok else CORAL, edgecolors="none")
 
+    # The same fit with metrics collapsed to one feature per family. Fewer free
+    # parameters lower the null, which is the whole point -- so the grouped null
+    # is drawn as its own shorter band and the grouped estimate as a small square.
+    has_grp = {"grouped_r", "grouped_null_p95"} <= set(df.columns)
+    if has_grp:
+        for i, row in df.reset_index().iterrows():
+            ax.barh(i - 0.30, row["grouped_null_p95"], 0.14, color=SAGE,
+                    alpha=0.40, zorder=3)
+        gclears = (df.grouped_clears.astype(bool) if "grouped_clears" in df
+                   else df.grouped_r > df.grouped_null_p95)
+        ax.scatter(df.grouped_r, y - 0.30, marker="s", s=34, zorder=6,
+                   color=[SAGE if g else CORAL for g in gclears],
+                   edgecolors="white", linewidths=1.0)
+
     ax.set_yticks(y); ax.set_yticklabels([_pretty(m) for m in df.method])
     ax.tick_params(axis="y", length=0)
     ax.set_xlabel("held-out correlation  r")
-    ax.set_xlim(min(0, df.observed_r.min() - 0.15), 1.05)
+    lo = min(0, df.observed_r.min(), df.ci_lo.min() if "ci_lo" in df else 0) - 0.05
+    ax.set_xlim(lo, 1.05)
     ax.axvline(0, c="#D2D8DC", lw=1)
-    _room(ax, len(df))
+    _room(ax, len(df), rows=0.75)
     _grid(ax, "x")
 
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
-    ax.legend(handles=[
+    handles = [
         Line2D([], [], marker="o", ls="none", mfc="white", mec=INK, mew=1.8,
-               ms=8, label="observed  (95% CI)"),
-        Patch(facecolor=GREY, alpha=0.45, label="what chance alone reaches (p95)"),
-    ], loc="lower right", ncol=2)
+               ms=8, label="all metrics  (95% CI)"),
+        Patch(facecolor=GREY, alpha=0.45, label="its null (p95)"),
+    ]
+    if has_grp:
+        handles += [
+            Line2D([], [], marker="s", ls="none", mfc=SAGE, mec="white", mew=1.0,
+                   ms=7, label="one feature per family"),
+            Patch(facecolor=SAGE, alpha=0.40, label="its null (p95)"),
+        ]
+    ax.legend(handles=handles, loc="lower right", ncol=2)
 
     _title(ax, "Does the result clear chance?",
-           "the grey band is the null -- a result inside it is not evidence")
+           "a marker inside its own band is not evidence;  fewer features, lower band")
     fig.tight_layout()
     _save(fig, cfg, "fig7_nulls.png")
 

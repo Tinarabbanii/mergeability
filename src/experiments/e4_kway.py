@@ -176,20 +176,27 @@ def run(cfg: Config, backend) -> dict[str, pd.DataFrame]:
             print("  -> consistent with the WEAKEST-LINK hypothesis: a group is "
                   "only as mergeable as its worst pair.")
         else:
-            print(f"  -> the weakest-link hypothesis is NOT supported; "
-                  f"'{winner}' aggregation fits better.")
+            wins = int((a["r_mean"] > a["r_min"]).sum())
+            print(f"  -> the weakest-link hypothesis is not supported in this "
+                  f"benchmark; '{winner}' fits better, and mean beat min in "
+                  f"{wins} of {len(a)} settings (no significance test).")
 
     if not c.empty:
         print(f"\n  ADDITIVITY CHECK   additive r={c.r_additive.mean():+.3f}   "
               f"pairwise r={c.r_pairwise_mean.mean():+.3f}   "
               f"increment={c.increment_r.mean():+.3f}")
-        if abs(c.increment_r.mean()) < 0.2:
+        gain = float((c.r_pairwise_mean - c.r_additive).mean())
+        print(f"     absolute gain over the additive baseline: {gain:+.3f}")
+        by_k = c.groupby("k").apply(
+            lambda g: float((g.r_pairwise_mean - g.r_additive).mean()))
+        print("     gain by k: " + "  ".join(f"k={k}:{v:+.3f}" for k, v in by_k.items()))
+        if c.increment_r.mean() < 0.2:
             print("  -> k-way merging is essentially ADDITIVE in the tasks: knowing")
             print("     which specific pairs are present adds almost nothing beyond")
             print("     knowing which tasks are present.")
         else:
-            print("  -> the pairwise structure carries information BEYOND the")
-            print("     additive task-level baseline: genuine higher-order effects.")
+            print("  -> pairwise structure explains variance the additive baseline")
+            print("     leaves over, though the absolute gain above is small.")
 
     print(f"\n  -> {cfg.artifact('e4_oracle.csv')}, {cfg.artifact('e4_transfer.csv')}, "
           f"{cfg.artifact('e4_additive.csv')}")

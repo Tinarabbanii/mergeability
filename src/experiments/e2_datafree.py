@@ -54,7 +54,11 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
     out.to_csv(path, index=False)
 
     if not out.empty:
-        print(f"\n  MEAN RETENTION ACROSS METHODS: {out['retention'].mean():.1%}")
-        print("  (this is the headline number for research question 1)")
+        defined = out["retention"].notna().sum()
+        if defined:
+            print(f"\n  mean ratio data-free/full over {defined} of {len(out)} methods: "
+                  f"{out['retention'].mean():.1%}")
+            print("  (undefined where either correlation is negative; see e5 for which "
+                  "methods clear their nulls at all)")
     print(f"  -> {path}")
     return out
