@@ -22,9 +22,21 @@ predictor:
                         #           direction IS the correlation-maximising one.
                         # 'pearson' the literal gradient maximiser, kept as a
                         #           fidelity check. Very slow.
-  l1_lambda: 0.01       # Lasso alpha. Chosen from a PLATEAU (flat across
-                        # 0.003-0.1), not from the peak -- the peak is fitted to
-                        # this sample and will not transfer.
+  l1_lambda: 0.01       # fallback only; used when lambda_grid is absent
+  lambda_grid: [0.0001, 0.000178, 0.000316, 0.000562, 0.001, 0.00178, 0.00316,
+                0.00562, 0.01, 0.0178, 0.0316, 0.0562, 0.1]
+                        # A log-spaced regularisation path, 13 points over three
+                        # decades, selected by nested CV inside each LOTO fold.
+                        # A fixed penalty is a free parameter: on this benchmark
+                        # 0.01 is the grid maximum for the marginal cases, so
+                        # fixing it flatters the result.
+                        #
+                        # Upper bound is 0.1, not higher: beyond that Lasso zeroes
+                        # every coefficient and _fit_lasso substitutes marginal
+                        # correlations -- a different estimator. Including such a
+                        # point would let selection pick a degenerate model.
+                        # MUST stay ascending: _select_lambda's one-SE rule takes
+                        # the largest qualifying penalty by index.
   steps: 1200           # 'pearson' solver only; ignored by lasso. 1200 is where
                         # held-out r stops drifting. At 600 it is NOT converged.
   lr: 0.05              # 'pearson' solver only

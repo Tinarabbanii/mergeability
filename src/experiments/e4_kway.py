@@ -9,7 +9,7 @@ import pandas as pd
 from ..config import Config
 from ..metrics import AGG_MAX, AGG_MIN, MetricComputer
 from ..pipeline import feature_columns, load_joined
-from ..predict import fit_linear_l1, minmax_apply, minmax_fit
+from ..predict import fit_linear_l1, minmax_apply, minmax_fit, select_lambda_cv
 
 def _corr(a, b) -> float:
     a, b = np.asarray(a, float), np.asarray(b, float)
@@ -114,7 +114,8 @@ def test_b_transfer(cfg: Config, df: pd.DataFrame, mc: MetricComputer) -> pd.Dat
     kw = dict(l1_lambda=float(p["l1_lambda"]), steps=int(p["steps"]),
               lr=float(p["lr"]), seed=cfg.seed,
               n_restarts=int(p.get("n_restarts", 5)),
-              solver=str(p.get("solver", "lasso")))
+              solver=str(p.get("solver", "lasso")),
+              lambda_grid=p.get("lambda_grid"))
     base_cols = feature_columns(df, "data_free", mc)
 
     rows = []
@@ -127,7 +128,15 @@ def test_b_transfer(cfg: Config, df: pd.DataFrame, mc: MetricComputer) -> pd.Dat
         xtr_raw = np.nan_to_num(train[base_cols].to_numpy(float), nan=0.0,
                                 posinf=0.0, neginf=0.0)
         lo, hi = minmax_fit(xtr_raw)
-        fit = fit_linear_l1(minmax_apply(xtr_raw, lo, hi), train["normalized_accuracy"].to_numpy(float), base_cols, **kw)
+        xtr = minmax_apply(xtr_raw, lo, hi)
+        ytr = train["normalized_accuracy"].to_numpy(float)
+        fit_kw = {kk: vv for kk, vv in kw.items() if kk != "lambda_grid"}
+        grid = kw.get("lambda_grid")
+        if grid:
+            subs_tr = [tuple(s.split("|")) for s in train["tasks"]]
+            fit_kw["l1_lambda"] = select_lambda_cv(
+                subs_tr, xtr, ytr, base_cols, cfg.task_names, grid, **fit_kw)
+        fit = fit_linear_l1(xtr, ytr, base_cols, **fit_kw)
         for k in [v for v in cfg.k_values if v > 2]:
             block = sub[sub.k == k]
             if len(block) < 3:

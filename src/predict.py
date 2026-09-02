@@ -1,7 +1,15 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import os
 import numpy as np
 import torch
+from joblib import Parallel, delayed
+
+# Null and bootstrap trials are independent, so they run across cores. The
+# random draws are generated up front in the SERIAL order (see the null
+# functions below), so results are identical whatever N_JOBS is set to.
+# Override with MERGEABILITY_N_JOBS=1 to reproduce the single-process path.
+N_JOBS = int(os.environ.get("MERGEABILITY_N_JOBS", "-1"))
 
 L1_FITS = {"fits": 0, "fallbacks": 0}
 def fallback_report(label: str = "") -> str:
@@ -35,6 +43,7 @@ class FitResult:
     weights: np.ndarray
     train_r: float
     feature_names: list[str]
+    used_fallback: bool = False
 
 def _fit_lasso(x: np.ndarray, y: np.ndarray, feature_names: list[str], l1_lambda: float) -> FitResult:
     import warnings
@@ -51,10 +60,12 @@ def _fit_lasso(x: np.ndarray, y: np.ndarray, feature_names: list[str], l1_lambda
         model = Lasso(alpha=l1_lambda, fit_intercept=True, max_iter=50000, tol=1e-4)
         model.fit(x, ys)
     w = np.asarray(model.coef_, dtype=float)
+    fell_back = False
     L1_FITS["fits"] += 1
 
     if np.linalg.norm(w) < 1e-12:
         L1_FITS["fallbacks"] += 1
+        fell_back = True
         import warnings
         warnings.warn(
             f"Lasso(alpha={l1_lambda}) zeroed all {x.shape[1]} coefficients; "
@@ -74,7 +85,7 @@ def _fit_lasso(x: np.ndarray, y: np.ndarray, feature_names: list[str], l1_lambda
     pred = x @ w
     r = (float(np.corrcoef(pred, y)[0, 1])
          if np.std(pred) > 1e-12 and np.std(y) > 1e-12 else 0.0)
-    return FitResult(w, r, feature_names)
+    return FitResult(w, r, feature_names, fell_back)
 
 def fit_linear_l1(x: np.ndarray,
     y: np.ndarray,
@@ -127,6 +138,36 @@ def collapse_groups(x: np.ndarray, groups: list[str]) -> tuple[np.ndarray, list[
         cols.append(x[:, idx].mean(axis=1))
     return np.stack(cols, axis=1), names
 
+def select_lambda_cv(subsets, x, y, feature_names, tasks,
+                     grid: list[float], **kw) -> float:
+    kw.pop("l1_lambda", None)          # set per-candidate below
+    kw.pop("lambda_grid", None)        # never recurse
+    scores, ses = [], []
+    for lam in grid:
+        res = loto_evaluate(subsets, x, y, feature_names, tasks,
+                            l1_lambda=lam, lambda_grid=None, **kw)
+        m, s, n = res["fold_r_mean"], res["fold_r_std"], res["n_folds"]
+        degenerate = res.get("n_fallback", 0) > 0
+        scores.append(-np.inf if (degenerate or np.isnan(m)) else m)
+        ses.append(s / np.sqrt(n) if n and not np.isnan(s) else 0.0)
+
+    best = int(np.argmax(scores))
+    if not np.isfinite(scores[best]):
+        return grid[len(grid) // 2]
+    threshold = scores[best] - ses[best]
+    ok = [i for i, sc in enumerate(scores) if sc >= threshold]
+    return grid[max(ok)] if ok else grid[best]
+
+
+def _select_lambda(subsets, x, y, feature_names, tasks, held_out,
+                   grid: list[float], **kw) -> float:
+    tr = [i for i, s in enumerate(subsets) if held_out not in s]
+    inner_tasks = [t for t in tasks if t != held_out]
+    if len(tr) < 4 or len(inner_tasks) < 3:
+        return grid[len(grid) // 2]
+    idx = np.asarray(tr)
+    return select_lambda_cv([subsets[i] for i in tr], x[idx], y[idx],
+                            feature_names, inner_tasks, grid, **kw)
 def loto_evaluate(subsets: list[tuple[str, ...]],
     x: np.ndarray,
     y: np.ndarray,
@@ -138,11 +179,14 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
     seed: int = 0,
     groups: list[str] | None = None,
     n_restarts: int = 5,
-    solver: str = "lasso",) -> dict:
+    solver: str = "lasso",
+    lambda_grid: list[float] | None = None,) -> dict:
     held_sum = np.zeros(len(y), dtype=float)
     held_cnt = np.zeros(len(y), dtype=float)
     fold_r: list[float] = []
     fold_weights: list[np.ndarray] = []
+    chosen_lambdas: list[float] = []
+    n_fallback = 0
 
     for t in tasks:
         val_idx = np.array([i for i, s in enumerate(subsets) if t in s])
@@ -158,12 +202,19 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
             xtr, names = collapse_groups(xtr, groups)
             xva, _ = collapse_groups(xva, groups)
 
-        fit = fit_linear_l1(xtr, y[tr_idx], names, l1_lambda, steps, lr,
+        lam = l1_lambda
+        if lambda_grid:
+            lam = _select_lambda(subsets, x, y, feature_names, tasks, t,
+                                 lambda_grid, steps=steps, lr=lr, seed=seed,
+                                 groups=groups, n_restarts=n_restarts, solver=solver)
+        chosen_lambdas.append(lam)
+        fit = fit_linear_l1(xtr, y[tr_idx], names, lam, steps, lr,
                             seed, n_restarts, solver)
         pred = xva @ fit.weights
         held_sum[val_idx] += pred
         held_cnt[val_idx] += 1
         fold_weights.append(fit.weights)
+        n_fallback += int(fit.used_fallback)
 
         if len(val_idx) >= 3 and np.std(pred) > 1e-12 and np.std(y[val_idx]) > 1e-12:
             fold_r.append(float(np.corrcoef(pred, y[val_idx])[0, 1]))
@@ -187,18 +238,40 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
         "held_pred": held_pred,
         "mean_weights": mean_w,
         "feature_names": feature_names,
+        "chosen_lambdas": chosen_lambdas,
+        "n_fallback": n_fallback,
     }
+
+def _trial(fn, *args, **kw):
+    """Run one trial and report this worker's L1 fit counts back to the parent.
+
+    In a loky worker L1_FITS starts at zero and its increments would otherwise
+    be discarded when the process exits, silently breaking fallback_report().
+    """
+    before = dict(L1_FITS)
+    res = fn(*args, **kw)
+    return res, {k: L1_FITS[k] - before[k] for k in ("fits", "fallbacks")}
+
+
+def _run_trials(jobs) -> list:
+    out = Parallel(n_jobs=N_JOBS)(jobs)
+    for _, counts in out:
+        L1_FITS["fits"] += counts["fits"]
+        L1_FITS["fallbacks"] += counts["fallbacks"]
+    return [res for res, _ in out]
+
 
 def null_random_features(subsets, y, tasks, n_features: int, n_trials: int = 20, **kw) -> dict:
     seed = int(kw.pop("seed", 0))
     rng = np.random.default_rng(seed)
-    scores = []
     names = [f"noise_{i}" for i in range(n_features)]
-    for t in range(n_trials):
-        x = rng.standard_normal((len(y), n_features))
-        res = loto_evaluate(subsets, x, y, names, tasks, seed=seed + t, **kw)
-        if not np.isnan(res["pooled_r"]):
-            scores.append(res["pooled_r"])
+    # drawn in the serial loop's order, so parallelism cannot shift the stream
+    xs = [rng.standard_normal((len(y), n_features)) for _ in range(n_trials)]
+    out = _run_trials(
+        delayed(_trial)(loto_evaluate, subsets, xs[t], y, names, tasks,
+                        seed=seed + t, **kw)
+        for t in range(n_trials))
+    scores = [r["pooled_r"] for r in out if not np.isnan(r["pooled_r"])]
     return {
         "mean": float(np.mean(scores)) if scores else float("nan"),
         "std": float(np.std(scores)) if scores else float("nan"),
@@ -211,12 +284,12 @@ def null_shuffled_target(
 ) -> dict:
     seed = int(kw.pop("seed", 0))
     rng = np.random.default_rng(seed)
-    scores = []
-    for t in range(n_trials):
-        y_shuf = rng.permutation(y)
-        res = loto_evaluate(subsets, x, y_shuf, feature_names, tasks, seed=seed + t, **kw)
-        if not np.isnan(res["pooled_r"]):
-            scores.append(res["pooled_r"])
+    ys = [rng.permutation(y) for _ in range(n_trials)]
+    out = _run_trials(
+        delayed(_trial)(loto_evaluate, subsets, x, ys[t], feature_names, tasks,
+                        seed=seed + t, **kw)
+        for t in range(n_trials))
+    scores = [r["pooled_r"] for r in out if not np.isnan(r["pooled_r"])]
     return {
         "mean": float(np.mean(scores)) if scores else float("nan"),
         "std": float(np.std(scores)) if scores else float("nan"),
@@ -251,7 +324,7 @@ def split_half_reliability(
     return {"split_half_r": r, "spearman_brown": sb, "n_splits": len(rs), "all": rs}
 
 def _fit_normalised(x, y, feature_names, **kw) -> np.ndarray:
-    kw = {k: v for k, v in kw.items() if k != "seed"}
+    kw = {k: v for k, v in kw.items() if k not in ("seed", "lambda_grid")}
     lo, hi = minmax_fit(x)
     return fit_linear_l1(minmax_apply(x, lo, hi), y, feature_names, **kw).weights
 
@@ -261,14 +334,13 @@ def bootstrap_r(
     seed = int(kw.pop("seed", 0))
     rng = np.random.default_rng(seed)
     n = len(y)
-    scores = []
-    for b in range(n_boot):
-        idx = rng.integers(0, n, size=n)
-        sub_s = [subsets[i] for i in idx]
-        res = loto_evaluate(sub_s, x[idx], y[idx], feature_names, tasks,
-                            seed=seed + b, **kw)
-        if not np.isnan(res["pooled_r"]):
-            scores.append(res["pooled_r"])
+    idxs = [rng.integers(0, n, size=n) for _ in range(n_boot)]
+    out = _run_trials(
+        delayed(_trial)(loto_evaluate, [subsets[i] for i in idxs[b]],
+                        x[idxs[b]], y[idxs[b]], feature_names, tasks,
+                        seed=seed + b, **kw)
+        for b in range(n_boot))
+    scores = [r["pooled_r"] for r in out if not np.isnan(r["pooled_r"])]
     if not scores:
         return {"lo": float("nan"), "hi": float("nan"), "median": float("nan"), "n": 0}
     return {

@@ -17,7 +17,8 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
     kw = dict(l1_lambda=float(p["l1_lambda"]), steps=int(p["steps"]),
               lr=float(p["lr"]), seed=cfg.seed,
               n_restarts=int(p.get("n_restarts", 5)),
-              solver=str(p.get("solver", "lasso")))
+              solver=str(p.get("solver", "lasso")),
+              lambda_grid=p.get("lambda_grid"))
     n_trials = int(cfg.eval["nulls"]["n_random_trials"])
     cols = feature_columns(df, "data_free", mc)
 

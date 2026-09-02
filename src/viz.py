@@ -6,7 +6,9 @@
     fig5  split-half reliability                           (from e3)
     fig6  RQ2: which aggregator predicts k-way             (from e4)
     fig7  observed r against both null baselines           (from e5)
-    fig8  RQ2's control: pairwise vs the additive baseline (from e4)"""
+    fig8  RQ2's control: pairwise vs the additive baseline (from e4)
+    fig9  item 3: TIES density sweep, quality vs predictability
+    fig10 item 4: calibration size, metric stability vs prediction"""
 
 from __future__ import annotations
 
@@ -311,8 +313,19 @@ def fig4_importance(cfg: Config) -> None:
                 ax.text(j, i, f"{val:+.2f}", ha="center", va="center", fontsize=7.8,
                         color="white" if abs(val) > 0.62 * v else INK)
 
+    # A method whose predictor sits at chance has coefficients fitted to noise,
+    # so its column is not evidence about which metrics matter. fig3 greys such
+    # methods out; do the same here or the two figures contradict each other.
+    cleared = _cleared_methods(cfg)
+    labels = []
+    for j, c in enumerate(piv.columns):
+        if cleared is not None and c not in cleared:
+            ax.axvspan(j - 0.5, j + 0.5, color="white", alpha=0.62, zorder=3)
+            labels.append(f"{_pretty(c)}\n(at chance)")
+        else:
+            labels.append(_pretty(c))
     ax.set_xticks(range(len(piv.columns)))
-    ax.set_xticklabels([_pretty(c) for c in piv.columns])
+    ax.set_xticklabels(labels)
     ax.set_yticks(range(len(piv.index)))
     ax.set_yticklabels([i.replace("_", " ") for i in piv.index], fontsize=8.2)
     ax.tick_params(axis="both", length=0)
@@ -330,7 +343,7 @@ def fig4_importance(cfg: Config) -> None:
 
     _title(ax, "Which data-free metrics carry the signal",
            "red = higher metric predicts better merging,  blue = the opposite,  "
-           "0 = dropped by the L1 penalty")
+           "0 = dropped by the L1 penalty;  faded = method does not clear its null")
     fig.tight_layout()
     _save(fig, cfg, "fig4_importance.png")
 
@@ -530,8 +543,115 @@ def fig8_additive(cfg: Config) -> None:
     _save(fig, cfg, "fig8_additive.png")
 
 
+def fig9_density(cfg: Config) -> None:
+    """Item 3 -- the TIES trim controls merge QUALITY but not PREDICTABILITY.
+
+    Left: post-merge accuracy rises steeply then plateaus, so the paper's
+    density=0.2 sits well to the aggressive side of the optimum. Right: held-out
+    r stays at chance across the whole sweep, INCLUDING density=1.0 where the
+    trim is switched off entirely. The trim is not what makes TIES unpredictable.
+    """
+    sweep = _read(cfg, "density_sweep.csv")
+    pred = _read(cfg, "density_predictability.csv")
+    if sweep is None or pred is None or sweep.empty or pred.empty:
+        return
+
+    g = sweep.groupby("density").normalized_accuracy.agg(["mean", "std"]).reset_index()
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.0))
+
+    ax = axes[0]
+    ax.errorbar(g.density, g["mean"], yerr=g["std"], marker="o", ms=5.5,
+                color=BLUE, ecolor=FAINT, elinewidth=1.1, capsize=3, zorder=3)
+    ax.axvline(0.2, color=CORAL, lw=1.2, ls="--", zorder=2)
+    ax.text(0.21, ax.get_ylim()[0], "  paper's 0.2", color=CORAL, fontsize=8,
+            va="bottom", ha="left")
+    ax.set_xscale("log")
+    ax.set_xlabel("TIES density (fraction of weights kept)")
+    ax.set_ylabel("normalised accuracy")
+    _grid(ax); _title(ax, "Merge quality rises, then plateaus",
+                      "error bars: std across the 21 pairs")
+
+    ax = axes[1]
+    ax.axhline(0, color=INK, lw=1.0, zorder=2)
+    ax.plot(pred.density, pred.data_free_r, marker="o", ms=5.5, color=BLUE,
+            label="data-free", zorder=3)
+    ax.plot(pred.density, pred.full_r, marker="s", ms=5.0, color=CORAL,
+            label="full metric set", zorder=3)
+    ax.axvline(1.0, color=SAGE, lw=1.2, ls="--", zorder=2)
+    ax.text(0.99, 0.02, "trim OFF  ", color=SAGE, fontsize=8, rotation=90,
+            va="bottom", ha="right", transform=ax.get_xaxis_transform())
+    ax.set_xscale("log")
+    ax.set_xlabel("TIES density (fraction of weights kept)")
+    ax.set_ylabel("held-out r (LOTO)")
+    ax.legend(loc="lower left", fontsize=8.5)
+    _grid(ax); _title(ax, "Predictability does not follow",
+                      "at or below zero throughout, including with the trim off")
+
+    _figtitle(fig, "Density sweep (k=2): the trim is not the cause of TIES's unpredictability",
+              "quality responds to density; predictability does not. Pairs only -- "
+              "TIES behaves differently at k=4, which this sweep did not test")
+    _save(fig, cfg, "fig9_density.png")
+
+
+def fig10_calibration(cfg: Config) -> None:
+    """Item 4 -- 10x calibration data does not rescue the full metric set.
+
+    Left: how well each data-dependent metric at 10 samples agrees with itself
+    at 100. Two gradient metrics sit at chance, so the paper's sample size does
+    not estimate a stable quantity. Right: despite that, the full set does not
+    improve -- the data-free advantage is structural, not a noise artifact.
+    """
+    stab = _read(cfg, "calibration_stability.csv")
+    pred = _read(cfg, "calibration_prediction.csv")
+    if stab is None or pred is None or stab.empty or pred.empty:
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(11.0, 0.40 * len(stab) + 2.0),
+                             gridspec_kw={"width_ratios": [1.15, 1]})
+
+    ax = axes[0]
+    d = stab.sort_values("corr_10_vs_100")
+    y = np.arange(len(d))
+    # anything below 0.3 is not measuring a stable quantity
+    cols = [GREY if v < 0.3 else BLUE for v in d.corr_10_vs_100]
+    bars = ax.barh(y, d.corr_10_vs_100, 0.6, color=cols, zorder=3)
+    ax.axvline(0, color=INK, lw=1.0, zorder=2)
+    ax.set_yticks(y); ax.set_yticklabels(d.metric, fontsize=8.4)
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlim(-0.35, 1.12)
+    ax.set_xlabel("corr(10 samples, 100 samples)")
+    _grid(ax, "x")
+    _label_barh(ax, bars, d.corr_10_vs_100.tolist(), "{:+.2f}")
+    _title(ax, "Metric stability across calibration size",
+           "grey: below 0.3, not a stable quantity at 10 samples")
+
+    ax = axes[1]
+    y = np.arange(len(pred)); h = 0.30
+    b1 = ax.barh(y + h / 2, pred.full_cal10, h, color=GREY, zorder=3,
+                 label="full, 10 samples")
+    b2 = ax.barh(y - h / 2, pred.full_cal100, h, color=CORAL, zorder=3,
+                 label="full, 100 samples")
+    ax.scatter(pred.data_free_cal10, y, marker="D", s=34, color=BLUE, zorder=4,
+               label="data-free (calibration-independent)")
+    ax.axvline(0, color=INK, lw=1.0, zorder=2)
+    ax.set_yticks(y); ax.set_yticklabels([_pretty(m) for m in pred.method], fontsize=8.4)
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlabel("held-out r (LOTO)")
+    ax.legend(loc="upper right", fontsize=8)   # bars run left up here, so this stays clear
+    _grid(ax, "x")
+    _label_barh(ax, b1, pred.full_cal10.tolist(), "{:+.2f}")
+    _label_barh(ax, b2, pred.full_cal100.tolist(), "{:+.2f}")
+    _title(ax, "More calibration data does not help",
+           "data-free still dominates at 10x the samples")
+
+    _figtitle(fig, "Calibration size: a real flaw that is not the explanation",
+              "two gradient metrics are unstable, yet fixing that does not rescue the full set")
+    _save(fig, cfg, "fig10_calibration.png")
+
+
 ALL = [fig1_setup, fig2_merge_quality, fig3_datafree, fig4_importance,
-       fig5_reliability, fig6_kway, fig7_nulls, fig8_additive]
+       fig5_reliability, fig6_kway, fig7_nulls, fig8_additive,
+       fig9_density, fig10_calibration]
 
 
 def make_all(cfg: Config) -> None:

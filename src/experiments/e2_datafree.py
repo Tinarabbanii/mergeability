@@ -20,7 +20,8 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
     kw = dict(l1_lambda=float(p["l1_lambda"]), steps=int(p["steps"]),
               lr=float(p["lr"]), seed=cfg.seed,
               n_restarts=int(p.get("n_restarts", 5)),
-              solver=str(p.get("solver", "lasso")))
+              solver=str(p.get("solver", "lasso")),
+              lambda_grid=p.get("lambda_grid"))
 
     rows = []
     for method in cfg.merge_methods:
@@ -41,6 +42,12 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
             result[f"{kind}_r"] = out["pooled_r"]
             result[f"{kind}_fold_r"] = out["fold_r_mean"]
             result[f"{kind}_n_features"] = len(cols)
+
+            lams = out.get("chosen_lambdas") or []
+            if lams:
+                result[f"{kind}_lambda_median"] = float(np.median(lams))
+                result[f"{kind}_lambda_min"] = float(min(lams))
+                result[f"{kind}_lambda_max"] = float(max(lams))
 
         free_r, full_r = result["data_free_r"], result["full_r"]
         result["retention"] = (free_r / full_r) if (full_r > 1e-9 and free_r > 0) else np.nan

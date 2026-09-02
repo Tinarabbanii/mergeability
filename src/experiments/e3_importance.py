@@ -19,7 +19,8 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
     kw = dict(l1_lambda=float(p["l1_lambda"]), steps=int(p["steps"]),
               lr=float(p["lr"]), seed=cfg.seed,
               n_restarts=int(p.get("n_restarts", 5)),
-              solver=str(p.get("solver", "lasso")))
+              solver=str(p.get("solver", "lasso")),
+              lambda_grid=p.get("lambda_grid"))
 
     cols = feature_columns(df, "data_free", mc)
     coef_rows, rel_rows = [], []
@@ -55,16 +56,45 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
 # Method's agreements
     if not coefs.empty and coefs.method.nunique() > 1:
         piv = coefs.pivot(index="metric", columns="method", values="coefficient")
-        signs = np.sign(piv.to_numpy())
-        agree = []
-        for i in range(signs.shape[1]):
-            for j in range(i + 1, signs.shape[1]):
-                both = (signs[:, i] != 0) & (signs[:, j] != 0)
-                if both.sum():
-                    agree.append((signs[both, i] == signs[both, j]).mean())
-        if agree:
-            print(f"\n  cross-method SIGN AGREEMENT: {np.mean(agree):.1%}")
+
+        def _agreement(methods) -> float | None:
+            sub = piv[[m for m in methods if m in piv.columns]]
+            if sub.shape[1] < 2:
+                return None
+            signs = np.sign(sub.to_numpy())
+            agree = []
+            for i in range(signs.shape[1]):
+                for j in range(i + 1, signs.shape[1]):
+                    both = (signs[:, i] != 0) & (signs[:, j] != 0)
+                    if both.sum():
+                        agree.append((signs[both, i] == signs[both, j]).mean())
+            return float(np.mean(agree)) if agree else None
+
+        a_all = _agreement(list(piv.columns))
+        if a_all is not None:
+            print(f"\n  cross-method SIGN AGREEMENT (all methods): {a_all:.1%}")
             print("  (paper reports 79.3% on their 20-task benchmark)")
+
+        # A method whose predictor is at chance has coefficients fitted to noise,
+        # so any sign it agrees on is an accident and inflates the figure above.
+        # Restrict to methods that beat their null. This needs e5, so it is
+        # skipped when e5 has not run yet (run_all does e3 before e5).
+        nulls = cfg.artifact(f"e5_nulls_k{k}.csv")
+        if nulls.exists():
+            nl = pd.read_csv(nulls)
+            p95 = nl[["null_random_p95", "null_shuffled_p95"]].max(axis=1)
+            clearing = nl.loc[nl.observed_r > p95, "method"].tolist()
+            a_clear = _agreement(clearing)
+            if a_clear is not None:
+                print(f"  restricted to methods clearing their null "
+                      f"({', '.join(clearing)}): {a_clear:.1%}")
+            else:
+                print(f"  restricted to methods clearing their null: UNDEFINED -- only "
+                      f"{len(clearing)} ({', '.join(clearing) or 'none'}) clears, and "
+                      f"agreement needs two. The {a_all:.1%} above is therefore carried "
+                      f"by methods whose coefficients are noise.")
+        else:
+            print("  (run e5 to see this restricted to methods that clear their null)")
 
     print(f"  -> {cfg.artifact(f'e3_coefficients_k{k}.csv')}")
     return coefs
