@@ -58,7 +58,8 @@ TORCHVISION_TASKS = {
 
 HF_TASKS = {
     "RESISC45": "hf://datasets/tanganke/resisc45/data/test-*.parquet",
-    "Cars":     "hf://datasets/tanganke/stanford_cars/data/test-*.parquet",}
+    "Cars":     "hf://datasets/tanganke/stanford_cars/data/test-*.parquet",
+    "SUN397":   "hf://datasets/tanganke/sun397/data/test-*.parquet",}
 class _HFDataset(Dataset):
     def __init__(self, ds, transform):
         self.ds, self.transform = ds, transform

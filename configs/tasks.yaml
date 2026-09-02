@@ -60,10 +60,4 @@ clip:
   # that would put the same spurious component into every task vector.
   param_prefix: "model.visual."
 
-  # Tasks whose TEST IMAGES are staged. Checkpoints and heads also exist for
-  # RESISC45 and Cars, but every dataset URL the task_vectors repo cites now
-  # returns 404/403, so they cannot be evaluated. Add them back the moment the
-  # images are staged -- task COUNT is what this study is short of:
-  #   5 tasks -> 10 pairs      7 tasks -> 21 pairs
-  #   6 tasks -> 15 pairs      8 tasks -> 28 pairs
-  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD, RESISC45, Cars]
+  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD, RESISC45, Cars, SUN397]
