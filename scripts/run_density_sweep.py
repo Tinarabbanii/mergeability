@@ -1,16 +1,3 @@
-"""TIES density sweep: does predictability rise as the trim gets less aggressive?
-
-TIES is the only non-linear merge operator in the benchmark, and the only one
-whose mergeability the data-free metrics fail to predict. `density` controls the
-trim -- the dominant non-linearity -- so sweeping it turns "linear methods are
-predictable, TIES is not" from a comparison across three different algorithms
-into a controlled experiment inside a single one.
-
-Only the merges and evaluations run here; the metric table is untouched, because
-the data-free metrics depend on the task vectors, not on how they are merged.
-
-Writes artifacts/<backend>/density_sweep.csv (one row per density x subset).
-"""
 from __future__ import annotations
 import argparse, sys, time
 from pathlib import Path

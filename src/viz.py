@@ -313,9 +313,6 @@ def fig4_importance(cfg: Config) -> None:
                 ax.text(j, i, f"{val:+.2f}", ha="center", va="center", fontsize=7.8,
                         color="white" if abs(val) > 0.62 * v else INK)
 
-    # A method whose predictor sits at chance has coefficients fitted to noise,
-    # so its column is not evidence about which metrics matter. fig3 greys such
-    # methods out; do the same here or the two figures contradict each other.
     cleared = _cleared_methods(cfg)
     labels = []
     for j, c in enumerate(piv.columns):
@@ -544,13 +541,6 @@ def fig8_additive(cfg: Config) -> None:
 
 
 def fig9_density(cfg: Config) -> None:
-    """Item 3 -- the TIES trim controls merge QUALITY but not PREDICTABILITY.
-
-    Left: post-merge accuracy rises steeply then plateaus, so the paper's
-    density=0.2 sits well to the aggressive side of the optimum. Right: held-out
-    r stays at chance across the whole sweep, INCLUDING density=1.0 where the
-    trim is switched off entirely. The trim is not what makes TIES unpredictable.
-    """
     sweep = _read(cfg, "density_sweep.csv")
     pred = _read(cfg, "density_predictability.csv")
     if sweep is None or pred is None or sweep.empty or pred.empty:
@@ -594,13 +584,6 @@ def fig9_density(cfg: Config) -> None:
 
 
 def fig10_calibration(cfg: Config) -> None:
-    """Item 4 -- 10x calibration data does not rescue the full metric set.
-
-    Left: how well each data-dependent metric at 10 samples agrees with itself
-    at 100. Two gradient metrics sit at chance, so the paper's sample size does
-    not estimate a stable quantity. Right: despite that, the full set does not
-    improve -- the data-free advantage is structural, not a noise artifact.
-    """
     stab = _read(cfg, "calibration_stability.csv")
     pred = _read(cfg, "calibration_prediction.csv")
     if stab is None or pred is None or stab.empty or pred.empty:
@@ -612,7 +595,6 @@ def fig10_calibration(cfg: Config) -> None:
     ax = axes[0]
     d = stab.sort_values("corr_10_vs_100")
     y = np.arange(len(d))
-    # anything below 0.3 is not measuring a stable quantity
     cols = [GREY if v < 0.3 else BLUE for v in d.corr_10_vs_100]
     bars = ax.barh(y, d.corr_10_vs_100, 0.6, color=cols, zorder=3)
     ax.axvline(0, color=INK, lw=1.0, zorder=2)
@@ -637,7 +619,7 @@ def fig10_calibration(cfg: Config) -> None:
     ax.set_yticks(y); ax.set_yticklabels([_pretty(m) for m in pred.method], fontsize=8.4)
     ax.tick_params(axis="y", length=0)
     ax.set_xlabel("held-out r (LOTO)")
-    ax.legend(loc="upper right", fontsize=8)   # bars run left up here, so this stays clear
+    ax.legend(loc="upper right", fontsize=8)
     _grid(ax, "x")
     _label_barh(ax, b1, pred.full_cal10.tolist(), "{:+.2f}")
     _label_barh(ax, b2, pred.full_cal100.tolist(), "{:+.2f}")

@@ -1,27 +1,3 @@
-"""Does 10x more calibration data rescue the data-dependent metrics?
-
-The headline result is that the DATA-FREE metric set outperforms the full set.
-That is surprising: the full set is a superset, so with a well-behaved estimator
-it should never do worse. One explanation is that the paper's calibration size
-(samples_per_task: 10, sections 3.4 and 3.5) is too small for the activation and
-gradient metrics to converge, so they enter the fit as noise and cost more in
-variance than they add in signal.
-
-This tests that directly by recomputing every metric at samples_per_task: 100 and
-asking two questions:
-
-  1. STABILITY -- how well does each data-dependent metric at 10 samples agree
-     with itself at 100? A low correlation means the paper's number does not
-     estimate a stable quantity.
-  2. PREDICTION -- does the FULL feature set predict better when its
-     data-dependent columns are less noisy? If full_r rises towards (or past)
-     data_free_r, noise was the explanation. If it does not move, the data-free
-     advantage is structural and calibration size is not the story.
-
-The data-free columns are identical in both files by construction -- they never
-touch calibration data -- so they serve as a built-in control: any difference
-there means the two runs are not comparable and the comparison is void.
-"""
 from __future__ import annotations
 import argparse, sys
 from pathlib import Path
@@ -53,7 +29,7 @@ def main() -> None:
     dep = [c for c in mc.all_metric_names()
            if c in m10.columns and c not in free]
 
-    # CONTROL: data-free columns must be bit-identical across the two runs.
+                                                                           
     drift = {c: float(np.nanmax(np.abs(m10[c] - m100[c]))) for c in free}
     worst = max(drift.values()) if drift else 0.0
     print(f"  control: {len(free)} data-free columns, max drift = {worst:.2e}")

@@ -1,21 +1,3 @@
-"""Does PREDICTABILITY rise with TIES density, or only merge quality?
-
-run_density_sweep.py showed post-merge accuracy climbing from density 0.05 to a
-plateau at 0.4-0.8. That is a statement about how WELL the merge works. Item 3
-asks something different: does the data-free predictor track the outcome better
-as the trim gets less aggressive? If it does, TIES's unpredictability is caused
-by the trim -- the one clearly non-linear step -- and not by TIES as a whole.
-
-For each density slice this refits the same LOTO predictor used in e2 and reports
-held-out r, so the numbers are comparable to e2_datafree_k2.csv by construction.
-
-CAUTION when reading the output: the spread of the target narrows as density
-rises (std 0.090 -> 0.062). Correlation is scale-free but NOT immune to range
-restriction -- a shrinking spread in y can depress r even when the underlying
-relationship is unchanged. std_y is printed beside r so the two are read
-together; a rising r ALONGSIDE a shrinking std_y is the strong result, since
-range restriction would push the other way.
-"""
 from __future__ import annotations
 import argparse, sys
 from pathlib import Path
@@ -37,8 +19,8 @@ def main() -> None:
     sweep = pd.read_csv(cfg.artifact("density_sweep.csv"))
     metrics = pd.read_csv(cfg.artifact("metrics.csv")).drop(columns=["k"])
 
-    # names only -- data_free_metric_names() reads config, never the backend,
-    # so no checkpoints are loaded and this stays a CPU-only analysis.
+                                                                             
+                                                                      
     mc = MetricComputer(cfg, None)
     p = cfg.eval["predictor"]
     kw = dict(l1_lambda=float(p["l1_lambda"]), steps=int(p["steps"]),

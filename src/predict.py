@@ -5,10 +5,6 @@ import numpy as np
 import torch
 from joblib import Parallel, delayed
 
-# Null and bootstrap trials are independent, so they run across cores. The
-# random draws are generated up front in the SERIAL order (see the null
-# functions below), so results are identical whatever N_JOBS is set to.
-# Override with MERGEABILITY_N_JOBS=1 to reproduce the single-process path.
 N_JOBS = int(os.environ.get("MERGEABILITY_N_JOBS", "-1"))
 
 L1_FITS = {"fits": 0, "fallbacks": 0}
@@ -243,11 +239,6 @@ def loto_evaluate(subsets: list[tuple[str, ...]],
     }
 
 def _trial(fn, *args, **kw):
-    """Run one trial and report this worker's L1 fit counts back to the parent.
-
-    In a loky worker L1_FITS starts at zero and its increments would otherwise
-    be discarded when the process exits, silently breaking fallback_report().
-    """
     before = dict(L1_FITS)
     res = fn(*args, **kw)
     return res, {k: L1_FITS[k] - before[k] for k in ("fits", "fallbacks")}
@@ -265,7 +256,6 @@ def null_random_features(subsets, y, tasks, n_features: int, n_trials: int = 20,
     seed = int(kw.pop("seed", 0))
     rng = np.random.default_rng(seed)
     names = [f"noise_{i}" for i in range(n_features)]
-    # drawn in the serial loop's order, so parallelism cannot shift the stream
     xs = [rng.standard_normal((len(y), n_features)) for _ in range(n_trials)]
     out = _run_trials(
         delayed(_trial)(loto_evaluate, subsets, xs[t], y, names, tasks,

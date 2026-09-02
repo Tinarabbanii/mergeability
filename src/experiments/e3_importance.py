@@ -75,10 +75,6 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
             print(f"\n  cross-method SIGN AGREEMENT (all methods): {a_all:.1%}")
             print("  (paper reports 79.3% on their 20-task benchmark)")
 
-        # A method whose predictor is at chance has coefficients fitted to noise,
-        # so any sign it agrees on is an accident and inflates the figure above.
-        # Restrict to methods that beat their null. This needs e5, so it is
-        # skipped when e5 has not run yet (run_all does e3 before e5).
         nulls = cfg.artifact(f"e5_nulls_k{k}.csv")
         if nulls.exists():
             nl = pd.read_csv(nulls)
