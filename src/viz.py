@@ -610,7 +610,9 @@ def fig9_density(cfg: Config) -> None:
 
 def fig10_calibration(cfg: Config) -> None:
     stab = _read(cfg, "calibration_stability.csv")
-    pred = _read(cfg, "calibration_prediction.csv")
+    pred = _read(cfg, "calibration_prediction_k2.csv")
+    if pred is None:
+        pred = _read(cfg, "calibration_prediction.csv")
     if stab is None or pred is None or stab.empty or pred.empty:
         return
 
@@ -648,8 +650,8 @@ def fig10_calibration(cfg: Config) -> None:
     _grid(ax, "x")
     _label_barh(ax, b1, pred.full_cal10.tolist(), "{:+.2f}")
     _label_barh(ax, b2, pred.full_cal100.tolist(), "{:+.2f}")
-    _title(ax, "More calibration data does not help",
-           "data-free still dominates at 10x the samples")
+    _title(ax, "More calibration data does not help  (k=2)",
+           "data-free still dominates at 10x the samples; k=3 and k=4 in the CSVs")
 
     nsub = pred.n.iloc[0] if "n" in pred.columns else None
     from math import comb

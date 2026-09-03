@@ -81,9 +81,9 @@ def main() -> None:
 
     out = pd.DataFrame(rows)
     stab_df.to_csv(cfg.artifact("calibration_stability.csv"), index=False)
-    out.to_csv(cfg.artifact("calibration_prediction.csv"), index=False)
+    out.to_csv(cfg.artifact(f"calibration_prediction_k{args.k}.csv"), index=False)
     print(f"\n  -> {cfg.artifact('calibration_stability.csv')}")
-    print(f"  -> {cfg.artifact('calibration_prediction.csv')}")
+    print(f"  -> {cfg.artifact(f'calibration_prediction_k{args.k}.csv')}")
 
 
 if __name__ == "__main__":
