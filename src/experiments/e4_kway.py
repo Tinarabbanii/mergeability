@@ -164,6 +164,16 @@ def run(cfg: Config, backend) -> dict[str, pd.DataFrame]:
     if not any(v > 2 for v in cfg.k_values):
         raise RuntimeError("no k > 2 in configs/eval.yaml:k_values")
 
+    from math import comb
+    n_pairs = df[df.k == 2].tasks.nunique()
+    expected = comb(len(cfg.task_names), 2)
+    if n_pairs < expected:
+        raise RuntimeError(
+            f"e4 needs every pair: found {n_pairs} of {expected} for "
+            f"{len(cfg.task_names)} tasks. Tests A and C drop any k-way subset "
+            f"whose pairs are missing, so results would be silently partial. "
+            f"Raise max_subsets_per_k in configs/eval.yaml and re-run e1.")
+
     print("\n  TEST A -- aggregating MEASURED pairwise accuracy:")
     a = test_a_oracle(cfg, df)
     print("\n  TEST C -- additive task-level baseline (the control):")

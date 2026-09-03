@@ -47,7 +47,8 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
         g_clears = g_obs > g_null_p95
 
         rows.append({
-            "method": method, "n_features": len(cols), "observed_r": observed,
+            "method": method, "n_subsets": len(sub), "n_tasks": len(cfg.task_names),
+            "n_features": len(cols), "observed_r": observed,
             "ci_lo": ci["lo"], "ci_hi": ci["hi"],
             "null_random_mean": n1["mean"], "null_random_p95": n1["p95"],
             "null_shuffled_mean": n2["mean"], "null_shuffled_p95": n2["p95"],

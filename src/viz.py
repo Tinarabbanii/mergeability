@@ -145,8 +145,23 @@ def _cleared_methods(cfg: Config, name: str = "e5_nulls_k2.csv") -> set | None:
     fig3 draws e2's correlations, but only e5 knows which of them are real.
     Returns None when e5 has not been run, so fig3 still renders standalone.
     """
+    path = cfg.artifact(name)
+    if not path.exists():
+        return None
+    for src in ("results.csv", "metrics.csv"):
+        p = cfg.artifact(src)
+        if p.exists() and path.stat().st_mtime < p.stat().st_mtime:
+            print(f"  WARNING {name} is older than {src}; null verdicts not applied")
+            return None
     d = _read(cfg, name)
     if d is None or d.empty or "clears_both_nulls" not in d:
+        return None
+    if "n_tasks" not in d.columns:
+        print(f"  WARNING {name} predates task-count recording; null verdicts not applied")
+        return None
+    if int(d.n_tasks.iloc[0]) != len(cfg.task_names):
+        print(f"  WARNING {name} was computed on {int(d.n_tasks.iloc[0])} tasks, "
+              f"config has {len(cfg.task_names)}; null verdicts not applied")
         return None
     return set(d.loc[d.clears_both_nulls.astype(bool), "method"])
 
@@ -209,15 +224,20 @@ def fig2_merge_quality(cfg: Config) -> None:
         for patch, c in zip(parts["boxes"], colours):
             patch.set_facecolor(c); patch.set_alpha(0.75); patch.set_edgecolor("none")
         rng = np.random.default_rng(0)
+        nmax = max((len(v) for v in data), default=1)
+        jitter = min(0.16, 0.055 + 0.0012 * nmax)
+        dot_s = 9 if nmax <= 30 else (6 if nmax <= 60 else 4)
+        dot_a = 0.35 if nmax <= 30 else (0.28 if nmax <= 60 else 0.22)
         for i, vals in enumerate(data, start=1):
-            ax.scatter(rng.normal(i, 0.055, len(vals)), vals, s=9,
-                       color=INK, alpha=0.35, zorder=5, linewidths=0)
+            ax.scatter(rng.normal(i, jitter, len(vals)), vals, s=dot_s,
+                       color=INK, alpha=dot_a, zorder=5, linewidths=0)
 
         ax.axhline(1.0, ls=(0, (4, 3)), c=GREY, lw=1.2, zorder=1)
         ax.set_xticks(range(1, len(methods) + 1))
         ax.set_xticklabels([_pretty(m).replace(" ", "\n") for m in methods])
         ax.tick_params(axis="x", length=0)
-        ax.set_title(f"k = {k}", loc="left", color=MUTED, fontsize=9.5)
+        ax.set_title(f"k = {k}   (n = {block.tasks.nunique()})", loc="left",
+                     color=MUTED, fontsize=9.5)
         _grid(ax)
 
     axes[0].set_ylabel("post-merge normalised accuracy")
@@ -558,8 +578,9 @@ def fig9_density(cfg: Config) -> None:
     ax.set_xscale("log")
     ax.set_xlabel("TIES density (fraction of weights kept)")
     ax.set_ylabel("normalised accuracy")
+    npairs = sweep.groupby("density").size().max()
     _grid(ax); _title(ax, "Merge quality rises, then plateaus",
-                      "error bars: std across the 21 pairs")
+                      f"error bars: std across the {npairs} pairs")
 
     ax = axes[1]
     ax.axhline(0, color=INK, lw=1.0, zorder=2)
@@ -577,9 +598,13 @@ def fig9_density(cfg: Config) -> None:
     _grid(ax); _title(ax, "Predictability does not follow",
                       "at or below zero throughout, including with the trim off")
 
+    from math import comb
+    expected = comb(len(cfg.task_names), 2)
+    config_note = ("" if npairs == expected else
+                   f"  NOTE: run on {npairs} pairs, the current config has {expected}")
     _figtitle(fig, "Density sweep (k=2): the trim is not the cause of TIES's unpredictability",
               "quality responds to density; predictability does not. Pairs only -- "
-              "TIES behaves differently at k=4, which this sweep did not test")
+              "TIES behaves differently at k=4, which this sweep did not test." + config_note)
     _save(fig, cfg, "fig9_density.png")
 
 
@@ -626,8 +651,14 @@ def fig10_calibration(cfg: Config) -> None:
     _title(ax, "More calibration data does not help",
            "data-free still dominates at 10x the samples")
 
+    nsub = pred.n.iloc[0] if "n" in pred.columns else None
+    from math import comb
+    expected2 = comb(len(cfg.task_names), 2)
+    note2 = ("" if nsub in (None, expected2) else
+             f"  NOTE: run on {nsub} pairs, the current config has {expected2}")
     _figtitle(fig, "Calibration size: a real flaw that is not the explanation",
-              "two gradient metrics are unstable, yet fixing that does not rescue the full set")
+              "two gradient metrics are unstable, yet fixing that does not "
+              "rescue the full set." + note2)
     _save(fig, cfg, "fig10_calibration.png")
 
 

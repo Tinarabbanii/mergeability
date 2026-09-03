@@ -22,6 +22,7 @@ class MetricComputer:
         self._flat: dict[str, torch.Tensor] = {}
         self._mats: dict[str, list[torch.Tensor]] = {}
         self._act: dict[str, torch.Tensor] = {}
+        self._pair_cache: dict[tuple[str, str], dict[str, float]] = {}
         self._grad: dict[str, torch.Tensor] = {}
         self._per_layer: dict[str, dict[str, torch.Tensor]] = {}
         self._decomp: dict[str, list] = {}
@@ -124,6 +125,9 @@ class MetricComputer:
 
     def _pairwise(self, a: str, b: str) -> dict[str, float]:
 ### Pairwise-defined metrics for pairs
+        key = (a, b) if a <= b else (b, a)
+        if key in self._pair_cache:
+            return self._pair_cache[key]
         out: dict[str, float] = {}
         if self._enabled("geometry"):
             out.update(geometry.compute_pair(self._flat_tv(a), self._flat_tv(b)))
@@ -133,6 +137,7 @@ class MetricComputer:
             out.update(functional.activation_pair(self._activation(a), self._activation(b)))
         if self._enabled("gradient"):
             out.update(functional.gradient_pair(self._gradient(a), self._gradient(b)))
+        self._pair_cache[key] = out
         return out
 
     def compute(self, tasks: tuple[str, ...]) -> dict[str, float]:

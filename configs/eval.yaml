@@ -5,10 +5,10 @@ seed: 0
 #   3, 4    -> the k-way study (RQ2)
 k_values: [2, 3, 4]
 
-# Cap on subsets per k, read by pipeline.enumerate_subsets. With 5 tasks:
-# 10 pairs, 10 triples, 5 quads -- all small enough to run exhaustively, so
-# this is generous. Lower it if a run gets too slow.
-max_subsets_per_k: 40
+# Cap on subsets per k, read by pipeline.enumerate_subsets. With 8 tasks:
+# 28 pairs, 56 triples, 70 quads. 100 leaves every k exhaustive. RE-CHECK THIS
+# WHENEVER THE TASK COUNT CHANGES -- at 40 it silently capped k=3 and k=4.
+max_subsets_per_k: 100
 
 # Real-data evaluation only: subsample each test set for speed.
 eval_samples_per_task: 1000

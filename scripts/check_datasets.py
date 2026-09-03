@@ -13,7 +13,7 @@ PLAN = {
     "EuroSAT":  ("EuroSAT",      dict(),                 90, True,  "no train/test split; one pool"),
     "DTD":      ("DTD",          dict(split="test"),    600, True,  "archive contains all splits"),
     "Cars":     ("StanfordCars", dict(split="test"),   1900, False, "torchvision URL IS DEAD -- Kaggle/HF"),
-    "SUN397":   ("SUN397",       dict(),              37000, False, "~37 GB -- do not attempt on a laptop"),
+    "SUN397":   ("SUN397",       dict(),              37000, False, "use the tanganke/sun397 HF mirror, not torchvision"),
     "RESISC45": (None,           dict(),                350, False, "NOT in torchvision -- Kaggle/HF only"),
 }
 ALTERNATIVES = """
@@ -21,7 +21,7 @@ Sourcing the three hard ones
 RESISC45   Kaggle: search "RESISC45" and attach the dataset to your notebook
            HuggingFace: `timm/resisc45` or `blanchon/RESISC45`
 Cars       Kaggle: "Stanford Cars Dataset" (the torchvision mirror is dead)
-SUN397     Skip it. 37 GB buys you a handful of extra pairs and costs a day.
+SUN397     HuggingFace: `tanganke/sun397` (torchvision wants the full 37 GB).
 
 On Kaggle you ATTACH a dataset rather than downloading it -- it appears under
 /kaggle/input and costs you none of your own disk. That is the single best
