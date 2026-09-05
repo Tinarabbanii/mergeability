@@ -38,18 +38,43 @@ def main() -> None:
 
             multi = loto_evaluate(subsets, x, y, cols, cfg.task_names, **kw)["pooled_r"]
 
-            best_r, best_c = -np.inf, None
+            oracle_r, oracle_c = -np.inf, None
             for j, c in enumerate(cols):
-                xi = x[:, [j]]
-                r = loto_evaluate(subsets, xi, y, [c], cfg.task_names, **kw)["pooled_r"]
-                if not np.isnan(r) and r > best_r:
-                    best_r, best_c = r, c
+                r = loto_evaluate(subsets, x[:, [j]], y, [c], cfg.task_names, **kw)["pooled_r"]
+                if not np.isnan(r) and r > oracle_r:
+                    oracle_r, oracle_c = r, c
+
+            held = np.full(len(y), np.nan)
+            picked = []
+            for t in cfg.task_names:
+                va = np.array([i for i, ss in enumerate(subsets) if t in ss])
+                tr = np.array([i for i, ss in enumerate(subsets) if t not in ss])
+                if len(va) < 1 or len(tr) < 3:
+                    continue
+                scores = []
+                for j in range(x.shape[1]):
+                    col = x[tr, j]
+                    scores.append(0.0 if np.std(col) < 1e-12 or np.std(y[tr]) < 1e-12
+                                  else abs(np.corrcoef(col, y[tr])[0, 1]))
+                j_star = int(np.nanargmax(scores))
+                sign = np.sign(np.corrcoef(x[tr, j_star], y[tr])[0, 1]) or 1.0
+                held[va] = sign * x[va, j_star]
+                picked.append(cols[j_star])
+            ok = ~np.isnan(held)
+            nested_r = (float(np.corrcoef(held[ok], y[ok])[0, 1])
+                        if ok.sum() >= 3 and np.std(held[ok]) > 1e-12 else float("nan"))
+            from collections import Counter
+            mode_c = Counter(picked).most_common(1)[0][0] if picked else None
 
             rows.append({"k": k, "method": method, "n": len(sub), "n_features": len(cols),
-                         "multivariate_r": multi, "best_single_r": best_r,
-                         "best_single_metric": best_c, "gain": multi - best_r})
-            print(f"  k={k} {method:<18} multi={multi:+.3f}  best single={best_r:+.3f} "
-                  f"({best_c})  gain={multi-best_r:+.3f}")
+                         "multivariate_r": multi,
+                         "best_single_nested_r": nested_r, "nested_metric_mode": mode_c,
+                         "best_single_oracle_r": oracle_r, "oracle_metric": oracle_c,
+                         "gain": multi - nested_r,
+                         "selection_bias": oracle_r - nested_r})
+            print(f"  k={k} {method:<18} multi={multi:+.3f}  single(nested)={nested_r:+.3f} "
+                  f"({mode_c})  gain={multi-nested_r:+.3f}   [oracle {oracle_r:+.3f}, "
+                  f"bias {oracle_r-nested_r:+.3f}]")
 
     out = pd.DataFrame(rows)
     path = cfg.artifact(f"univariate_{args.kind}.csv")
@@ -57,9 +82,9 @@ def main() -> None:
     w = int((out.gain > 0).sum())
     print(f"\n  the multi-metric model beats the best single metric in {w} of {len(out)} settings")
     print(f"  mean gain: {out.gain.mean():+.3f}")
-    print("\n  CAVEAT: the single metric is chosen AFTER seeing which scored best, so its")
-    print("  score is optimistically biased. The multivariate score has no such advantage.")
-    print("  A negative gain therefore understates the multivariate model.")
+    print("\n  'nested' picks the metric inside each fold using only the training tasks,")
+    print("  so it is an honest held-out score. 'oracle' picks after seeing all results;")
+    print("  the difference between them is the selection bias.")
     print(f"  -> {path}")
 
 
