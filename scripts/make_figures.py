@@ -6,7 +6,7 @@ from src.viz import make_all
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip"])
+    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip", "clip16"])
     args = ap.parse_args()
     make_all(load_config(args.backend))
 if __name__ == "__main__":

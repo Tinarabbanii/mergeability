@@ -52,6 +52,7 @@ class Config:
 
 
 def load_config(backend: str = "synthetic") -> Config:
-    if backend not in ("synthetic", "clip"):
-        raise ValueError(f"unknown backend {backend!r}; use 'synthetic' or 'clip'")
+    available = sorted(_load("tasks"))
+    if backend not in available:
+        raise ValueError(f"unknown backend {backend!r}; configs/tasks.yaml has {available}")
     return Config(backend=backend)

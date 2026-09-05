@@ -7,7 +7,7 @@ from .config import ROOT
 
 ### Encoder
 class ClipImageEncoder(nn.Module):
-    def __init__(self, model_name: str = "ViT-B-32", pretrained: str | None = None):
+    def __init__(self, model_name: str, pretrained: str | None = None):
         super().__init__()
         try:
             import open_clip
@@ -21,7 +21,7 @@ class ClipImageEncoder(nn.Module):
         return self.model.encode_image(images)
 
 def build_encoder(cfg, device) -> ClipImageEncoder:
-    return ClipImageEncoder(cfg.tasks["clip"]["model"]).to(device)
+    return ClipImageEncoder(cfg.tasks[cfg.backend]["model"]).to(device)
 
 ### Head per task
 def build_head(task: str, ckpt_dir: Path, device) -> nn.Linear:
@@ -72,7 +72,7 @@ class _HFDataset(Dataset):
 def build_loader(cfg, task: str, preprocess, batch_size: int = 64):
     import torchvision.datasets as tvd
     n = int(cfg.eval["eval_samples_per_task"])
-    configured = cfg.tasks["clip"].get("data_root", "data")
+    configured = cfg.tasks[cfg.backend].get("data_root", "data")
     data_root = Path(configured)
     if not data_root.is_absolute():
         data_root = ROOT / data_root

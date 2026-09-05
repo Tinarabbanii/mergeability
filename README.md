@@ -55,12 +55,47 @@ uv run python scripts/run_e5.py     # null baselines + bootstrap intervals
 uv run python scripts/make_figures.py
 ```
 
-Or everything at once:
+Items 3 and 4 (TIES density sweep, calibration size):
 
 ```bash
-uv run python scripts/run_all.py                  # synthetic, seconds
+uv run python scripts/run_density_sweep.py --backend clip --k 2
+```
+```bash
+uv run python scripts/analyze_density_sweep.py --backend clip
+```
+```bash
+uv run python scripts/analyze_calibration.py --backend clip --k 2
+```
+
+Or everything at once -- e0-e5 at every k, the density sweep, the calibration
+study and all ten figures:
+
+```bash
+uv run python scripts/run_all.py                  # synthetic, ~90 s
 uv run python scripts/run_all.py --backend clip   # the real benchmark
 ```
+
+Add `--quick` to skip the density sweep and the calibration study.
+
+## Getting the checkpoints
+
+The CLIP backend needs eight fine-tuned ViT-B/32 encoders plus the zero-shot
+model, from the Task Arithmetic release:
+
+<https://drive.google.com/drive/folders/1u_Tva6x0p6oxu5Eo0ZZsf-520Cc_3MKw>
+
+Download the `ViT-B-32` folder. The files are pickled `ImageEncoder` objects, so
+convert them to plain state dicts once:
+
+```bash
+uv run python scripts/download_checkpoints.py --list
+```
+```bash
+uv run python scripts/download_checkpoints.py --convert /path/to/ViT-B-32
+```
+
+Test images are fetched automatically: MNIST, SVHN, GTSRB, EuroSAT and DTD from
+torchvision, RESISC45, Cars and SUN397 from the `tanganke/*` HuggingFace mirrors.
 
 ## Two backends
 

@@ -158,10 +158,10 @@ class SyntheticBackend:
 class ClipBackend:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        spec = cfg.tasks["clip"]
+        spec = cfg.tasks[cfg.backend]
         self.task_names = list(spec["tasks"])
         self.device = get_device()
-        self.ckpt_dir = (__import__("pathlib").Path(cfg.tasks["clip"]["checkpoint_dir"]))
+        self.ckpt_dir = (__import__("pathlib").Path(cfg.tasks[cfg.backend]["checkpoint_dir"]))
         if not self.ckpt_dir.is_absolute():
             from .config import ROOT
             self.ckpt_dir = ROOT / self.ckpt_dir
@@ -180,7 +180,7 @@ class ClipBackend:
         obj = torch.load(path, map_location="cpu", weights_only=False)
         sd = obj.state_dict() if hasattr(obj, "state_dict") else obj
         sd = {k: v.float() for k, v in sd.items() if torch.is_floating_point(v)}
-        prefix = self.cfg.tasks["clip"].get("param_prefix", "")
+        prefix = self.cfg.tasks[self.cfg.backend].get("param_prefix", "")
         if prefix:
             sd = {k: v for k, v in sd.items() if k.startswith(prefix)}
             if not sd:
@@ -263,7 +263,7 @@ class ClipBackend:
         loss = F.cross_entropy(head(encoder(x)), y)
         encoder.zero_grad()
         loss.backward()
-        prefix = self.cfg.tasks["clip"].get("param_prefix", "")
+        prefix = self.cfg.tasks[self.cfg.backend].get("param_prefix", "")
         out: StateDict = {}
         for name, p in encoder.named_parameters():
             if prefix and not name.startswith(prefix):
@@ -276,6 +276,6 @@ class ClipBackend:
 def get_backend(cfg: Config) -> Backend:
     if cfg.backend == "synthetic":
         return SyntheticBackend(cfg)
-    if cfg.backend == "clip":
+    if cfg.backend.startswith("clip"):
         return ClipBackend(cfg)
     raise ValueError(f"unknown backend {cfg.backend!r}")

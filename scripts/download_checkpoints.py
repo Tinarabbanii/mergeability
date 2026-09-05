@@ -10,7 +10,7 @@ from src.config import ROOT, load_config  # noqa: E402
 TASKS_8 = ["MNIST", "EuroSAT", "GTSRB", "SVHN", "RESISC45", "DTD", "Cars", "SUN397"]
 
 def cmd_list(cfg) -> None:
-    spec = cfg.tasks["clip"]
+    spec = cfg.tasks[cfg.backend]
     print("Checkpoints this project expects\n")
     print(f"  model:  {spec['model']}")
     print(f"  source: {spec['checkpoint_url']}")
@@ -62,20 +62,31 @@ def _install_stubs() -> None:
 
 
 def _load_pickled(path: Path):
-    import re
+    import pickle, re
     stub = _install_stubs()
-    for _ in range(40):
-        try:
-            return torch.load(path, map_location="cpu", weights_only=False)
-        except AttributeError as exc:
-            m = re.search(r"Can't get attribute '([^']+)' on <module '([^']+)'", str(exc))
-            if not m:
-                raise
-            attr, mod = m.group(1), m.group(2)
-            if mod not in sys.modules:
-                raise
-            setattr(sys.modules[mod], attr, stub)
-    raise RuntimeError(f"too many missing classes while loading {path}")
+
+    def _attempt(loader):
+        for _ in range(40):
+            try:
+                return loader()
+            except AttributeError as exc:
+                m = re.search(r"Can't get attribute '([^']+)' on <module '([^']+)'", str(exc))
+                if not m:
+                    raise
+                attr, mod = m.group(1), m.group(2)
+                if mod not in sys.modules:
+                    raise
+                setattr(sys.modules[mod], attr, stub)
+        raise RuntimeError(f"too many missing classes while loading {path}")
+
+    try:
+        return _attempt(lambda: torch.load(path, map_location="cpu", weights_only=False))
+    except RuntimeError as exc:
+        if "magic number" not in str(exc).lower():
+            raise
+    with open(path, "rb") as fh:
+        data = fh.read()
+    return _attempt(lambda: pickle.loads(data))
 
 def _to_state_dict(obj) -> dict:
     if hasattr(obj, "state_dict"):
@@ -89,7 +100,7 @@ def _to_state_dict(obj) -> dict:
     return {k: v.detach().cpu().float()
             for k, v in obj.items() if torch.is_tensor(v) and v.is_floating_point()}
 def cmd_convert(cfg, src_dir: Path) -> None:
-    out_dir = ROOT / cfg.tasks["clip"]["checkpoint_dir"]
+    out_dir = ROOT / cfg.tasks[cfg.backend]["checkpoint_dir"]
     out_dir.mkdir(parents=True, exist_ok=True)
     src_dir = Path(src_dir)
 
@@ -118,7 +129,7 @@ def cmd_convert(cfg, src_dir: Path) -> None:
         print("\n  *** WARNING: no zeroshot.pt produced. ***")
         print("  The pretrained checkpoint is REQUIRED -- a task vector is")
         print("  finetuned MINUS pretrained. Go back to the Drive folder and")
-        print("  fetch zeroshot.pt from the top level of ViT-B-32/.")
+        print(f"  fetch zeroshot.pt from the top level of {spec['model']}/.")
         print("  Substituting vanilla OpenAI CLIP does NOT work: its text tower")
         print("  differs from the true base by 0.073 in norm, even though")
         print("  fine-tuning never touches the text tower, so every task vector")
@@ -133,11 +144,12 @@ def cmd_convert(cfg, src_dir: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--backend", default="clip", choices=["clip", "clip16"])
     ap.add_argument("--list", action="store_true", help="show what is expected")
     ap.add_argument("--convert", metavar="DIR",
                     help="convert pickled checkpoints in DIR to plain state_dicts")
     args = ap.parse_args()
-    cfg = load_config("clip")
+    cfg = load_config(args.backend)
     if args.convert:
         cmd_convert(cfg, Path(args.convert))
     else:

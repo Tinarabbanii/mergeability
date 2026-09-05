@@ -37,12 +37,13 @@ def free_gb(path: Path) -> float:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--backend", default="clip", choices=["clip", "clip16"])
     ap.add_argument("--download", action="store_true",
                     help="actually download (skips the ones marked unavailable)")
     ap.add_argument("--only", nargs="*", help="restrict to these task names")
     args = ap.parse_args()
 
-    cfg = load_config("clip")
+    cfg = load_config(args.backend)
     data_root = ROOT / "data"
     data_root.mkdir(exist_ok=True)
     configured = list(cfg.task_names)

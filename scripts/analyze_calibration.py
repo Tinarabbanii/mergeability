@@ -12,7 +12,7 @@ from src.predict import loto_evaluate
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--backend", default="clip", choices=["synthetic", "clip"])
+    ap.add_argument("--backend", default="clip", choices=["synthetic", "clip", "clip16"])
     ap.add_argument("--k", type=int, default=2)
     args = ap.parse_args()
 

@@ -13,7 +13,7 @@ from src.utils import subsets
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--backend", default="clip", choices=["synthetic", "clip"])
+    ap.add_argument("--backend", default="clip", choices=["synthetic", "clip", "clip16"])
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--densities", default="0.05,0.1,0.2,0.4,0.8,1.0")
     args = ap.parse_args()

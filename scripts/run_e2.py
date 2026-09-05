@@ -8,7 +8,7 @@ from src.utils import set_seed
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip"])
+    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip", "clip16"])
     ap.add_argument("--k", type=int, default=2)
     args = ap.parse_args()
     cfg = load_config(args.backend)

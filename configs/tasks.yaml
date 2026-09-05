@@ -61,3 +61,11 @@ clip:
   param_prefix: "model.visual."
 
   tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD, RESISC45, Cars, SUN397]
+
+clip16:
+  model: ViT-B-16
+  checkpoint_url: https://github.com/mlfoundations/task_vectors
+  checkpoint_dir: checkpoints/ViT-B-16
+  data_root: data
+  param_prefix: "model.visual."
+  tasks: [MNIST, SVHN, GTSRB, EuroSAT, DTD, RESISC45, Cars, SUN397]

@@ -14,7 +14,7 @@ STEPS = [150, 300, 600, 1200, 2400]
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip"])
+    ap.add_argument("--backend", default="synthetic", choices=["synthetic", "clip", "clip16"])
     ap.add_argument("--solver", default=None, choices=["lasso", "pearson"])
     ap.add_argument("--k", type=int, default=2)
     ap.add_argument("--tol", type=float, default=0.05)
