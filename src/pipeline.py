@@ -86,11 +86,42 @@ def build_results(cfg: Config, backend, verbose: bool = True) -> pd.DataFrame:
     df.to_csv(path, index=False)
     exp = pd.DataFrame([{"task": t, "expert_accuracy": a} for t, a in experts.items()])
     exp.to_csv(cfg.artifact("experts.csv"), index=False)
+    write_run_info(cfg, len(todo))
     if verbose:
         print(f"  -> {path}  ({len(df)} merges)")
     return df
 
+def write_run_info(cfg: Config, n_subsets: int) -> None:
+    spec = cfg.tasks.get(cfg.backend, {})
+    pd.DataFrame([{
+        "backend": cfg.backend,
+        "model": spec.get("model", ""),
+        "n_tasks": len(cfg.task_names),
+        "tasks": "|".join(cfg.task_names),
+        "n_subsets": n_subsets,
+        "seed": cfg.seed,
+    }]).to_csv(cfg.artifact("run_info.csv"), index=False)
+
+
+def check_run_info(cfg: Config) -> None:
+    p = cfg.artifact("run_info.csv")
+    if not p.exists():
+        return
+    info = pd.read_csv(p).iloc[0]
+    spec = cfg.tasks.get(cfg.backend, {})
+    if str(info.backend) != cfg.backend or str(info.model) != str(spec.get("model", "")):
+        raise RuntimeError(
+            f"{p.parent.name} holds results from backend {info.backend!r} "
+            f"(model {info.model!r}) but the config is {cfg.backend!r} "
+            f"(model {spec.get('model','')!r}). Refusing to mix runs.")
+    if int(info.n_tasks) != len(cfg.task_names):
+        raise RuntimeError(
+            f"{p.parent.name} was produced with {int(info.n_tasks)} tasks, "
+            f"config has {len(cfg.task_names)}. Refusing to mix runs.")
+
+
 def load_joined(cfg: Config) -> pd.DataFrame:
+    check_run_info(cfg)
     m = pd.read_csv(cfg.artifact("metrics.csv"))
     r = pd.read_csv(cfg.artifact("results.csv"))
     return r.merge(m.drop(columns=["k"]), on="tasks", how="left")
