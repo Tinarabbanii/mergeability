@@ -66,6 +66,10 @@ plt.rcParams.update({
 # --------------------------------------------------------------------------- #
 def _save(fig, cfg: Config, name: str) -> None:
     path = cfg.figure(name)
+    spec = cfg.tasks.get(cfg.backend, {})
+    tag = spec.get("model", cfg.backend)
+    fig.text(0.995, -0.02, f"{tag} · {len(cfg.task_names)} tasks",
+             ha="right", va="top", fontsize=7, color=MUTED)
     fig.savefig(path)
     plt.close(fig)
     print(f"  -> {path}")
@@ -148,21 +152,21 @@ def _cleared_methods(cfg: Config, name: str = "e5_nulls_k2.csv") -> set | None:
     path = cfg.artifact(name)
     if not path.exists():
         return None
-    for src in ("results.csv", "metrics.csv"):
-        p = cfg.artifact(src)
-        if p.exists() and path.stat().st_mtime < p.stat().st_mtime:
-            print(f"  WARNING {name} is older than {src}; null verdicts not applied")
-            return None
     d = _read(cfg, name)
     if d is None or d.empty or "clears_both_nulls" not in d:
         return None
-    if "n_tasks" not in d.columns:
-        print(f"  WARNING {name} predates task-count recording; null verdicts not applied")
-        return None
-    if int(d.n_tasks.iloc[0]) != len(cfg.task_names):
-        print(f"  WARNING {name} was computed on {int(d.n_tasks.iloc[0])} tasks, "
-              f"config has {len(cfg.task_names)}; null verdicts not applied")
-        return None
+    if "n_tasks" in d.columns:
+        if int(d.n_tasks.iloc[0]) != len(cfg.task_names):
+            print(f"  WARNING {name} was computed on {int(d.n_tasks.iloc[0])} tasks, "
+                  f"config has {len(cfg.task_names)}; null verdicts not applied")
+            return None
+    else:
+        for src in ("results.csv", "metrics.csv"):
+            q = cfg.artifact(src)
+            if q.exists() and path.stat().st_mtime < q.stat().st_mtime:
+                print(f"  WARNING {name} predates task-count recording and is older "
+                      f"than {src}; null verdicts not applied")
+                return None
     return set(d.loc[d.clears_both_nulls.astype(bool), "method"])
 
 def fig1_setup(cfg: Config) -> None:
@@ -595,16 +599,16 @@ def fig9_density(cfg: Config) -> None:
     ax.set_xlabel("TIES density (fraction of weights kept)")
     ax.set_ylabel("held-out r (LOTO)")
     ax.legend(loc="lower left", fontsize=8.5)
-    _grid(ax); _title(ax, "Predictability does not follow",
-                      "at or below zero throughout, including with the trim off")
+    _grid(ax); _title(ax, "Predictability falls as the trim loosens",
+                      "data-free degrades gently; the full set drops sharply")
 
     from math import comb
     expected = comb(len(cfg.task_names), 2)
     config_note = ("" if npairs == expected else
                    f"  NOTE: run on {npairs} pairs, the current config has {expected}")
-    _figtitle(fig, "Density sweep (k=2): the trim is not the cause of TIES's unpredictability",
-              "quality responds to density; predictability does not. Pairs only -- "
-              "TIES behaves differently at k=4, which this sweep did not test." + config_note)
+    _figtitle(fig, "Density sweep (k=2): quality and predictability pull in opposite directions",
+              "a looser trim merges better but predicts worse, and the full metric set "
+              "degrades far faster than the data-free one." + config_note)
     _save(fig, cfg, "fig9_density.png")
 
 
@@ -646,21 +650,22 @@ def fig10_calibration(cfg: Config) -> None:
     ax.set_yticks(y); ax.set_yticklabels([_pretty(m) for m in pred.method], fontsize=8.4)
     ax.tick_params(axis="y", length=0)
     ax.set_xlabel("held-out r (LOTO)")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=3, fontsize=7.6,
+              frameon=False)
     _grid(ax, "x")
     _label_barh(ax, b1, pred.full_cal10.tolist(), "{:+.2f}")
     _label_barh(ax, b2, pred.full_cal100.tolist(), "{:+.2f}")
-    _title(ax, "More calibration data does not help  (k=2)",
-           "data-free still dominates at 10x the samples; k=3 and k=4 in the CSVs")
+    _title(ax, "10x the samples, worse predictions  (k=2)",
+           "data-free needs no calibration data at all; k=3 and k=4 in the CSVs")
 
     nsub = pred.n.iloc[0] if "n" in pred.columns else None
     from math import comb
     expected2 = comb(len(cfg.task_names), 2)
     note2 = ("" if nsub in (None, expected2) else
              f"  NOTE: run on {nsub} pairs, the current config has {expected2}")
-    _figtitle(fig, "Calibration size: a real flaw that is not the explanation",
-              "two gradient metrics are unstable, yet fixing that does not "
-              "rescue the full set." + note2)
+    _figtitle(fig, "Calibration size: more data makes the full metric set worse",
+              "two gradient metrics do not agree with themselves across sample "
+              "sizes; adding samples degrades prediction rather than fixing it." + note2)
     _save(fig, cfg, "fig10_calibration.png")
 
 

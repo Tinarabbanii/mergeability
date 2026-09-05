@@ -79,16 +79,14 @@ def run(cfg: Config, backend, k: int = 2) -> pd.DataFrame:
         sources = [cfg.artifact("results.csv"), cfg.artifact("metrics.csv")]
         reason = None
         if nulls.exists():
-            if any(src.exists() and nulls.stat().st_mtime < src.stat().st_mtime
-                   for src in sources):
-                reason = "it is older than results.csv/metrics.csv"
-            else:
-                probe = pd.read_csv(nulls)
-                if "n_tasks" not in probe.columns:
-                    reason = "it predates task-count recording"
-                elif int(probe.n_tasks.iloc[0]) != len(cfg.task_names):
+            probe = pd.read_csv(nulls)
+            if "n_tasks" in probe.columns:
+                if int(probe.n_tasks.iloc[0]) != len(cfg.task_names):
                     reason = (f"it was computed on {int(probe.n_tasks.iloc[0])} tasks, "
                               f"config has {len(cfg.task_names)}")
+            elif any(src.exists() and nulls.stat().st_mtime < src.stat().st_mtime
+                     for src in sources):
+                reason = "it predates task-count recording and is older than the data"
         stale = reason is not None
         if stale:
             print(f"  SKIPPED the null-restricted agreement: {nulls.name} is stale -- "

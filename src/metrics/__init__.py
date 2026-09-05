@@ -41,7 +41,7 @@ class MetricComputer:
         if self._enabled("subspace"):
             # sub_interact_* are excluded from the predictor. In THIS implementation
             # _interaction() and _alignment() come out numerically equivalent
-            # (r = 0.998 across all task pairs, CLIP ViT-B/32), so including both
+            # (r > 0.96 across all task pairs on every backbone tested), so including both
             # spends two of only ~21 degrees of freedom on one piece of information.
             # Whether that equivalence reflects the paper's intent or a misreading
             # of section 3.3 is an open question, put to the authors. The columns
