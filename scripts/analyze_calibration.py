@@ -29,7 +29,7 @@ def main() -> None:
     dep = [c for c in mc.all_metric_names()
            if c in m10.columns and c not in free]
 
-                                                                           
+
     drift = {c: float(np.nanmax(np.abs(m10[c] - m100[c]))) for c in free}
     worst = max(drift.values()) if drift else 0.0
     print(f"  control: {len(free)} data-free columns, max drift = {worst:.2e}")

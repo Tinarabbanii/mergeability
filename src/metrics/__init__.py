@@ -103,7 +103,7 @@ class MetricComputer:
                 bottom_k=int(self.sub_cfg["bottom_k"]),
                 sv_top=int(self.sub_cfg["singular_value_top"]),)
         return self._decomp[task]
-    
+
     def _per_layer_tv(self, task: str) -> dict[str, torch.Tensor]:
         if task not in self._per_layer:
             tv = self.task_vector(task)
