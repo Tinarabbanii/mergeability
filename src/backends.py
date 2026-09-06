@@ -186,7 +186,7 @@ class ClipBackend:
             if not sd:
                 raise RuntimeError(
                     f"no parameters matched prefix {prefix!r} in {path.name}; "
-                    f"check configs/tasks.yaml:clip.param_prefix")
+                    f"check configs/tasks.yaml:{self.cfg.backend}.param_prefix")
         self._cache[filename] = sd
         return sd
 

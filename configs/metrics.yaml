@@ -19,10 +19,13 @@ subspace:
   bottom_k: 10
   singular_value_top: 100   # top-100 for the singular-value overlap metric
   max_matrices: 64      # cap on how many 2-D weight matrices to SVD.
-                        # 0 = all of them. On ViT this is a large speedup, and
-                        # both models pick the same matrices because their
-                        # architectures are identical. It IS a deviation from
-                        # the paper, so state it in implementation details.
+                        # 0 = all of them. On ViT this is a large speedup. Both
+                        # backbones select the same 50 tensors by role, so the cap
+                        # does not bind at 8 tasks. Their positional embeddings
+                        # differ in size (50 vs 197 rows, from the patch count),
+                        # which is harmless: pairs are only ever compared within
+                        # one backbone. It IS a deviation from the paper, so state
+                        # it in implementation details.
 
 # Read by MetricComputer.__init__ (rank_eps).
 rank:

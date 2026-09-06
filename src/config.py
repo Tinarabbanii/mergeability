@@ -22,7 +22,7 @@ class Config:
     merging: dict[str, Any] = field(default_factory=lambda: _load("merging"))
     eval: dict[str, Any] = field(default_factory=lambda: _load("eval"))
 
-    backend: str = "synthetic"  # "synthetic" | "clip"
+    backend: str = "synthetic"  # any top-level key in configs/tasks.yaml
 
     @property
     def task_names(self) -> list[str]:
