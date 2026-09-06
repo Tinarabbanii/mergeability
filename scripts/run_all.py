@@ -68,6 +68,10 @@ def main() -> None:
         _script("analyze_density_sweep.py", "--backend", args.backend)
         print("\n" + "=" * 74)
         _calibration(cfg, ks)
+        print("\n" + "=" * 74)
+        for check in ("global_test", "paired_bootstrap", "univariate",
+                      "nmatched", "pooled_k", "increment_null"):
+            _script(f"analyze_{check}.py", "--backend", args.backend)
 
     print("\n" + "=" * 74)
     make_all(cfg)
