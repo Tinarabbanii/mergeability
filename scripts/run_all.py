@@ -14,7 +14,7 @@ def _script(name: str, *args: str) -> None:
     print("\n$ " + " ".join(cmd[1:]))
     subprocess.run(cmd, check=True, cwd=ROOT)
 
-def _calibration(cfg, backend, ks) -> None:
+def _calibration(cfg, ks) -> None:
     from src.pipeline import build_metrics
     p = ROOT / "configs" / "metrics.yaml"
     original = p.read_text()
@@ -26,7 +26,8 @@ def _calibration(cfg, backend, ks) -> None:
             print("  calibration skipped: samples_per_task is not 10")
             return
         p.write_text(patched)
-        build_metrics(load_config(cfg.backend), backend)
+        rebuilt = load_config(cfg.backend)
+        build_metrics(rebuilt, get_backend(rebuilt))
         shutil.copy(cfg.artifact("metrics.csv"), cfg.artifact("metrics_cal100.csv"))
     finally:
         p.write_text(original)
@@ -51,7 +52,8 @@ def main() -> None:
 
     print("\n" + "=" * 74); e0_sanity.run(cfg, backend)
     print("\n" + "=" * 74); e1_pairwise.run(cfg, backend, args.skip_e1, args.skip_e1)
-    print("\n" + "=" * 74); e2_datafree.run(cfg, backend)
+    for k in ks:
+        print("\n" + "=" * 74); e2_datafree.run(cfg, backend, k)
     for k in ks:
         print("\n" + "=" * 74); e3_importance.run(cfg, backend, k)
     print("\n" + "=" * 74); e4_kway.run(cfg, backend)
@@ -65,7 +67,7 @@ def main() -> None:
         _script("run_density_sweep.py", "--backend", args.backend, "--k", "2")
         _script("analyze_density_sweep.py", "--backend", args.backend)
         print("\n" + "=" * 74)
-        _calibration(cfg, backend, ks)
+        _calibration(cfg, ks)
 
     print("\n" + "=" * 74)
     make_all(cfg)
