@@ -103,17 +103,26 @@ def write_run_info(cfg: Config, n_subsets: int) -> None:
     }]).to_csv(cfg.artifact("run_info.csv"), index=False)
 
 
+def _as_text(value) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    return str(value)
+
+
 def check_run_info(cfg: Config) -> None:
     p = cfg.artifact("run_info.csv")
     if not p.exists():
         return
     info = pd.read_csv(p).iloc[0]
     spec = cfg.tasks.get(cfg.backend, {})
-    if str(info.backend) != cfg.backend or str(info.model) != str(spec.get("model", "")):
+    stored_backend = _as_text(info.backend)
+    stored_model = _as_text(info.model)
+    want_model = _as_text(spec.get("model", ""))
+    if stored_backend != cfg.backend or stored_model != want_model:
         raise RuntimeError(
-            f"{p.parent.name} holds results from backend {info.backend!r} "
-            f"(model {info.model!r}) but the config is {cfg.backend!r} "
-            f"(model {spec.get('model','')!r}). Refusing to mix runs.")
+            f"{p.parent.name} holds results from backend {stored_backend!r} "
+            f"(model {stored_model!r}) but the config is {cfg.backend!r} "
+            f"(model {want_model!r}). Refusing to mix runs.")
     if int(info.n_tasks) != len(cfg.task_names):
         raise RuntimeError(
             f"{p.parent.name} was produced with {int(info.n_tasks)} tasks, "

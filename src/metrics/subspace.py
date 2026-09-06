@@ -16,7 +16,15 @@ def _svd(mat: torch.Tensor):
     try:
         return torch.linalg.svd(mat, full_matrices=False)
     except Exception:  # Fails to converge on real weights
-        return torch.linalg.svd(mat + 1e-6 * torch.randn_like(mat), full_matrices=False)
+        import warnings
+        warnings.warn(
+            f"SVD did not converge on a {tuple(mat.shape)} matrix; retrying with "
+            f"seeded jitter. The result is reproducible but slightly perturbed.",
+            RuntimeWarning, stacklevel=2,
+        )
+        g = torch.Generator(device=mat.device).manual_seed(0)
+        jitter = torch.randn(mat.shape, generator=g, dtype=mat.dtype, device=mat.device)
+        return torch.linalg.svd(mat + 1e-6 * jitter, full_matrices=False)
 
 def decompose(mats: list[torch.Tensor], top_k: int = 10, bottom_k: int = 10,
               sv_top: int = 100) -> list[LayerDecomp]: # Results per task

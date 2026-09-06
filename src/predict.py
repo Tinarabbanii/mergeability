@@ -13,8 +13,15 @@ def fallback_report(label: str = "") -> str:
     if not f:
         return f"  L1 fallback: never fired ({n} fits) -- OK"
     pct = 100.0 * f / max(n, 1)
-    flag = "  <-- ABOVE 0.5%, INVESTIGATE" if pct > 0.5 else "  (baseline 0.033%, fine)"
-    return f"  L1 fallback fired {f}/{n} fits ({pct:.3f}%){flag}{label}"
+    return (
+        f"  L1 fallback fired {f}/{n} fits ({pct:.3f}%){label}\n"
+        f"  This counts EVERY fit: the lambda-selection path, the permutation nulls\n"
+        f"  and the bootstrap resamples, where an all-zero Lasso is the correct\n"
+        f"  answer and the candidate is discarded. It is not a count of affected\n"
+        f"  results. What matters is whether a REPORTED fit fell back, which is\n"
+        f"  loto_evaluate's own n_fallback -- and select_lambda_cv scores any\n"
+        f"  degenerate penalty as -inf, so a selected lambda never zeroes the fit."
+    )
 
 ### Pearson correlation
 def pearson(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
