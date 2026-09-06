@@ -558,7 +558,7 @@ def fig8_additive(cfg: Config) -> None:
     _note(axes[1], 0.2, "  threshold")
     _grid(axes[1], "x")
     _label_barh(axes[1], bars, inc.tolist(), "{:.3f}")
-    _title(axes[1], "Genuine higher-order signal",
+    _title(axes[1], "Signal beyond the additive baseline",
            "what the pairs explain that the tasks alone do not")
 
     fig.tight_layout(w_pad=2.2)
@@ -600,16 +600,21 @@ def fig9_density(cfg: Config) -> None:
     ax.set_xlabel("TIES density (fraction of weights kept)")
     ax.set_ylabel("held-out r (LOTO)")
     ax.legend(loc="lower left", fontsize=8.5)
+    _lo, _hi = pred.sort_values("density").iloc[0], pred.sort_values("density").iloc[-1]
+    _df_drop = float(_lo.data_free_r - _hi.data_free_r)
+    _fu_drop = float(_lo.full_r - _hi.full_r)
+    _faster = "the full set" if _fu_drop > _df_drop else "the data-free set"
     _grid(ax); _title(ax, "Predictability falls as the trim loosens",
-                      "data-free degrades gently; the full set drops sharply")
+                      f"{_faster} degrades faster: data-free {_df_drop:+.2f}, "
+                      f"full {_fu_drop:+.2f} from the tightest trim to no trim")
 
     from math import comb
     expected = comb(len(cfg.task_names), 2)
     config_note = ("" if npairs == expected else
                    f"  NOTE: run on {npairs} pairs, the current config has {expected}")
     _figtitle(fig, "Density sweep (k=2): quality and predictability pull in opposite directions",
-              "a looser trim merges better but predicts worse, and the full metric set "
-              "degrades far faster than the data-free one." + config_note)
+              f"a looser trim merges better but predicts worse; here {_faster} "
+              f"loses the most predictive power." + config_note)
     _save(fig, cfg, "fig9_density.png")
 
 
@@ -632,7 +637,8 @@ def fig10_calibration(cfg: Config) -> None:
     ax.axvline(0, color=INK, lw=1.0, zorder=2)
     ax.set_yticks(y); ax.set_yticklabels(d.metric, fontsize=8.4)
     ax.tick_params(axis="y", length=0)
-    ax.set_xlim(-0.35, 1.12)
+    vmin, vmax = float(d.corr_10_vs_100.min()), float(d.corr_10_vs_100.max())
+    ax.set_xlim(min(-0.35, vmin * 1.40), max(1.12, vmax * 1.14))
     ax.set_xlabel("corr(10 samples, 100 samples)")
     _grid(ax, "x")
     _label_barh(ax, bars, d.corr_10_vs_100.tolist(), "{:+.2f}")
