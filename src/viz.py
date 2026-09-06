@@ -68,7 +68,7 @@ def _save(fig, cfg: Config, name: str) -> None:
     path = cfg.figure(name)
     spec = cfg.tasks.get(cfg.backend, {})
     tag = spec.get("model", cfg.backend)
-    fig.text(0.995, -0.02, f"{tag} · {len(cfg.task_names)} tasks",
+    fig.text(0.995, -0.055, f"{tag} · {len(cfg.task_names)} tasks",
              ha="right", va="top", fontsize=7, color=MUTED)
     fig.savefig(path)
     plt.close(fig)
@@ -287,7 +287,7 @@ def fig3_datafree(cfg: Config) -> None:
     sub = "higher is better;  1.0 = perfect prediction"
     if cleared is not None and not all(solid):
         sub += ";  grey = does not clear its null"
-    _title(axes[0], "Predictive power", sub)
+    _title(axes[0], "Predictive power  (k = 2)", sub)
 
     pct = 100 * df.retention
     # retention is a ratio of two correlations; it is only meaningful when the
@@ -306,7 +306,8 @@ def fig3_datafree(cfg: Config) -> None:
     sub2 = "what you keep by dropping the data"
     if cleared is not None and not all(solid):
         sub2 += ";  grey bars rest on a null result"
-    _title(axes[1], "Retention", sub2)
+    sub2 += ";  k=3 and k=4 in e2_datafree_k*.csv"
+    _title(axes[1], "Retention  (k = 2)", sub2)
 
     fig.tight_layout(w_pad=2.4)
     _save(fig, cfg, "fig3_datafree.png")
@@ -655,17 +656,30 @@ def fig10_calibration(cfg: Config) -> None:
     _grid(ax, "x")
     _label_barh(ax, b1, pred.full_cal10.tolist(), "{:+.2f}")
     _label_barh(ax, b2, pred.full_cal100.tolist(), "{:+.2f}")
-    _title(ax, "10x the samples, worse predictions  (k=2)",
-           "data-free needs no calibration data at all; k=3 and k=4 in the CSVs")
+    delta = float((pred.full_cal100 - pred.full_cal10).mean())
+    n_worse = int((pred.full_cal100 < pred.full_cal10).sum())
+    _title(ax, f"10x the samples, mean change {delta:+.3f}  (k=2)",
+           f"worse for {n_worse} of {len(pred)} methods; data-free needs no "
+           f"calibration data at all; k=3 and k=4 in the CSVs")
 
     nsub = pred.n.iloc[0] if "n" in pred.columns else None
     from math import comb
     expected2 = comb(len(cfg.task_names), 2)
     note2 = ("" if nsub in (None, expected2) else
              f"  NOTE: run on {nsub} pairs, the current config has {expected2}")
-    _figtitle(fig, "Calibration size: more data makes the full metric set worse",
-              "two gradient metrics do not agree with themselves across sample "
-              "sizes; adding samples degrades prediction rather than fixing it." + note2)
+    unstable = int((stab.corr_10_vs_100 < 0.3).sum()) if stab is not None else 0
+    if delta < -0.02:
+        headline = "Calibration size: more data makes the full metric set worse"
+        why = "adding samples degrades prediction rather than fixing it."
+    elif delta > 0.02:
+        headline = "Calibration size: more data barely helps the full metric set"
+        why = "adding samples does not recover the unstable metrics."
+    else:
+        headline = "Calibration size: 10x more data leaves the full metric set unchanged"
+        why = "adding samples neither fixes nor degrades prediction."
+    _figtitle(fig, headline,
+              f"{unstable} of {len(stab) if stab is not None else 0} data-dependent "
+              f"metrics do not agree with themselves across sample sizes; " + why + note2)
     _save(fig, cfg, "fig10_calibration.png")
 
 
