@@ -12,18 +12,18 @@ core modules:
 
 ```
 src/
-  utils.py       state_dict algebra: task vectors, flatten, subsets
-  config.py      configs/*.yaml -> one Config object
-  backends.py    where models come from: synthetic | CLIP
-  metrics/       geometry, rank, subspace (data-free) + functional (not)
-  merging.py     weight averaging, task arithmetic, TIES
-  pipeline.py    metrics + merges + accuracies -> two CSVs
-  predict.py     L1 fit, leave-one-task-out CV, nulls, bootstrap
+  utils.py       State-dict algebra and subset enumeration
+  config.py      YAML-backed experiment configuration
+  backends.py    Model providers: synthetic | CLIP
+  metrics/       Data-free (geometry, rank, subspace) + functional
+  merging.py     Weight averaging, task arithmetic, TIES
+  pipeline.py    Metric computation and merge evaluation
+  predict.py     Sparse predictor, leave-one-task-out CV, nulls, bootstrap
   experiments/   e0..e5
-  viz.py         figure generation
-scripts/         one runner per experiment
-configs/         the experimental setup
-artifacts/       cached results, one directory per backend
+  viz.py         Figure generation
+scripts/         Experiment runners and analyses
+configs/         Experimental setup
+artifacts/       Cached results, per backend
 figures/
 ```
 
