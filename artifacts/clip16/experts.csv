@@ -1,0 +1,9 @@
+task,expert_accuracy
+MNIST,0.997
+SVHN,0.98
+GTSRB,0.99
+EuroSAT,1.0
+DTD,0.812
+RESISC45,0.96
+Cars,0.857
+SUN397,0.748

@@ -6,9 +6,13 @@ checkpoints/
 # downloaded datasets
 data/
 
-# generated results. Keeping them out is the reproducibility claim: a reviewer
-# should regenerate them, not download them.
-artifacts/
+# generated results. The two reported runs are kept so the numbers can be read
+# without a full regeneration; everything else (synthetic harness output, older
+# snapshots) stays out. Note git will not descend into an excluded directory, so
+# these must be listed as artifacts/* plus explicit re-inclusions.
+artifacts/*
+!artifacts/clip/
+!artifacts/clip16/
 
 # environments
 .venv/
@@ -38,6 +42,7 @@ __pycache__/
 # `!figures/clip/` would silently ignore everything.
 figures/*
 !figures/clip/
+!figures/clip16/
 
 # editor / R noise
 .Rhistory

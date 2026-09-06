@@ -1,0 +1,2 @@
+backend,model,n_tasks,tasks,n_subsets,seed
+clip,ViT-B-32,8,MNIST|SVHN|GTSRB|EuroSAT|DTD|RESISC45|Cars|SUN397,154,0

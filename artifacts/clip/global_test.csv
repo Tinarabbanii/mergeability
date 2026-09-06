@@ -1,0 +1,3 @@
+variant,n_comparisons,n_clearing,expected_by_chance,p_value
+individual metrics,9,9,0.45,1.953125000000001e-12
+family-grouped,9,6,0.45,1.1510234375e-06
