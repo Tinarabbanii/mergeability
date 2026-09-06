@@ -7,7 +7,43 @@ import pandas as pd
 from src.config import load_config
 from src.metrics import MetricComputer
 from src.pipeline import feature_columns, load_joined
-from src.predict import loto_evaluate
+from src.predict import loto_evaluate, minmax_apply, minmax_fit
+
+
+def _single_metric_r(subsets, x, y, tasks, fixed_j=None):
+    held_sum = np.zeros(len(y), dtype=float)
+    held_cnt = np.zeros(len(y), dtype=float)
+    picked = []
+    for t in tasks:
+        va = np.array([i for i, ss in enumerate(subsets) if t in ss])
+        tr = np.array([i for i, ss in enumerate(subsets) if t not in ss])
+        if len(va) < 2 or len(tr) < 3:
+            continue
+        lo, hi = minmax_fit(x[tr])
+        xtr = minmax_apply(x[tr], lo, hi)
+        xva = minmax_apply(x[va], lo, hi)
+        if fixed_j is None:
+            scores = []
+            for j in range(xtr.shape[1]):
+                col = xtr[:, j]
+                scores.append(0.0 if np.std(col) < 1e-12 or np.std(y[tr]) < 1e-12
+                              else abs(np.corrcoef(col, y[tr])[0, 1]))
+            j_star = int(np.nanargmax(scores))
+        else:
+            j_star = fixed_j
+        if np.std(xtr[:, j_star]) < 1e-12 or np.std(y[tr]) < 1e-12:
+            continue
+        sign = np.sign(np.corrcoef(xtr[:, j_star], y[tr])[0, 1]) or 1.0
+        held_sum[va] += sign * xva[:, j_star]
+        held_cnt[va] += 1
+        picked.append(j_star)
+    ok = held_cnt > 0
+    if ok.sum() < 3:
+        return float("nan"), picked
+    held = held_sum[ok] / held_cnt[ok]
+    if np.std(held) < 1e-12 or np.std(y[ok]) < 1e-12:
+        return float("nan"), picked
+    return float(np.corrcoef(held, y[ok])[0, 1]), picked
 
 
 def main() -> None:
@@ -40,29 +76,12 @@ def main() -> None:
 
             oracle_r, oracle_c = -np.inf, None
             for j, c in enumerate(cols):
-                r = loto_evaluate(subsets, x[:, [j]], y, [c], cfg.task_names, **kw)["pooled_r"]
+                r, _ = _single_metric_r(subsets, x, y, cfg.task_names, fixed_j=j)
                 if not np.isnan(r) and r > oracle_r:
                     oracle_r, oracle_c = r, c
 
-            held = np.full(len(y), np.nan)
-            picked = []
-            for t in cfg.task_names:
-                va = np.array([i for i, ss in enumerate(subsets) if t in ss])
-                tr = np.array([i for i, ss in enumerate(subsets) if t not in ss])
-                if len(va) < 1 or len(tr) < 3:
-                    continue
-                scores = []
-                for j in range(x.shape[1]):
-                    col = x[tr, j]
-                    scores.append(0.0 if np.std(col) < 1e-12 or np.std(y[tr]) < 1e-12
-                                  else abs(np.corrcoef(col, y[tr])[0, 1]))
-                j_star = int(np.nanargmax(scores))
-                sign = np.sign(np.corrcoef(x[tr, j_star], y[tr])[0, 1]) or 1.0
-                held[va] = sign * x[va, j_star]
-                picked.append(cols[j_star])
-            ok = ~np.isnan(held)
-            nested_r = (float(np.corrcoef(held[ok], y[ok])[0, 1])
-                        if ok.sum() >= 3 and np.std(held[ok]) > 1e-12 else float("nan"))
+            nested_r, picked_idx = _single_metric_r(subsets, x, y, cfg.task_names)
+            picked = [cols[j] for j in picked_idx]
             from collections import Counter
             mode_c = Counter(picked).most_common(1)[0][0] if picked else None
 
@@ -82,9 +101,13 @@ def main() -> None:
     w = int((out.gain > 0).sum())
     print(f"\n  the multi-metric model beats the best single metric in {w} of {len(out)} settings")
     print(f"  mean gain: {out.gain.mean():+.3f}")
-    print("\n  'nested' picks the metric inside each fold using only the training tasks,")
-    print("  so it is an honest held-out score. 'oracle' picks after seeing all results;")
-    print("  the difference between them is the selection bias.")
+    print("\n  Both single-metric scores use the same folds, the same min-max scaling")
+    print("  fitted on training tasks only, and the same averaging of predictions")
+    print("  over folds as the multivariate model.")
+    print("  'nested' chooses the metric inside each fold from the training tasks, so")
+    print("  it is an honest held-out score. 'oracle' fixes one metric chosen after")
+    print("  seeing every fold. They differ ONLY in when the metric is chosen, so")
+    print("  oracle minus nested isolates the selection bias.")
     print(f"  -> {path}")
 
 
