@@ -35,10 +35,27 @@ Every function takes a **list** of task vectors, never a pair, which is what mak
 uv sync
 ```
 
+The synthetic backend runs on CPU and needs nothing else. The two CLIP backends
+need checkpoints and datasets, neither redistributed here.
+
+**Datasets.** Eight classification sets. Five resolve through torchvision. Three
+do not: the torchvision Stanford Cars mirror is dead, RESISC45 was never in
+torchvision, and torchvision's SUN397 is the full 37 GB rather than the split we
+score on. The checker prints where to get each one.
+
 ```bash
-# fine-tuned CLIP encoders from the Task Arithmetic release
+uv run python scripts/check_datasets.py
+```
+
+**Checkpoints.** Fine-tuned CLIP encoders from the
+[Task Arithmetic release](https://github.com/mlfoundations/task_vectors),
+~430 MB each.
+
+```bash
 uv run python scripts/download_checkpoints.py --convert /path/to/ViT-B-32
 ```
+
+Device is picked automatically: CUDA, then MPS, then CPU.
 
 ```bash
 uv run python scripts/run_all.py                    # synthetic harness, ~7 min
@@ -68,6 +85,11 @@ uv run python scripts/make_figures.py --backend clip
 uv run python scripts/run_density_sweep.py --backend clip --k 2
 uv run python scripts/analyze_density_sweep.py --backend clip
 uv run python scripts/analyze_calibration.py --backend clip --k 2
+```
+
+```bash
+# the figures as they appear in the report
+uv run python scripts/make_report_figs.py
 ```
 
 ```bash
