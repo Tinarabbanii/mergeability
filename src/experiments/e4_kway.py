@@ -117,39 +117,65 @@ def test_b_transfer(cfg: Config, df: pd.DataFrame, mc: MetricComputer) -> pd.Dat
               solver=str(p.get("solver", "lasso")),
               lambda_grid=p.get("lambda_grid"))
     base_cols = feature_columns(df, "data_free", mc)
+    aggs = (("mean", ""), ("min", AGG_MIN), ("max", AGG_MAX))
 
     rows = []
     for method in cfg.merge_methods:
         sub = df[df.method == method]
-        train = sub[sub.k == 2]
-        if len(train) < 6:
+        pairs = sub[sub.k == 2]
+        if len(pairs) < 6:
             continue
+        pair_subs = [tuple(t.split("|")) for t in pairs["tasks"]]
 
-        xtr_raw = np.nan_to_num(train[base_cols].to_numpy(float), nan=0.0,
-                                posinf=0.0, neginf=0.0)
-        lo, hi = minmax_fit(xtr_raw)
-        xtr = minmax_apply(xtr_raw, lo, hi)
-        ytr = train["normalized_accuracy"].to_numpy(float)
-        fit_kw = {kk: vv for kk, vv in kw.items() if kk != "lambda_grid"}
-        grid = kw.get("lambda_grid")
-        if grid:
-            subs_tr = [tuple(s.split("|")) for s in train["tasks"]]
-            fit_kw["l1_lambda"] = select_lambda_cv(
-                subs_tr, xtr, ytr, base_cols, cfg.task_names, grid, **fit_kw)
-        fit = fit_linear_l1(xtr, ytr, base_cols, **fit_kw)
         for k in [v for v in cfg.k_values if v > 2]:
-            block = sub[sub.k == k]
+            block = sub[sub.k == k].reset_index(drop=True)
             if len(block) < 3:
                 continue
             y = block["normalized_accuracy"].to_numpy(float)
-            row = {"method": method, "k": k, "n": len(block), "train_r": fit.train_r}
+            block_subs = [tuple(t.split("|")) for t in block["tasks"]]
+            acc = {a: [np.zeros(len(block)), np.zeros(len(block))] for a, _ in aggs}
+            train_rs = []
 
-            for agg_name, prefix in (("mean", ""), ("min", AGG_MIN), ("max", AGG_MAX)):
-                cols = [prefix + c if prefix + c in block.columns else c for c in base_cols]
-                x = np.nan_to_num(block[cols].to_numpy(float), nan=0.0,
-                                  posinf=0.0, neginf=0.0)
-                pred = minmax_apply(x, lo, hi) @ fit.weights
-                row[f"r_{agg_name}"] = _corr(pred, y)
+            for t in cfg.task_names:
+                tr_idx = np.array([i for i, s in enumerate(pair_subs) if t not in s])
+                val_idx = np.array([i for i, s in enumerate(block_subs) if t in s])
+                if len(tr_idx) < 3 or len(val_idx) < 2:
+                    continue
+                tr = pairs.iloc[tr_idx]
+                xtr_raw = np.nan_to_num(tr[base_cols].to_numpy(float), nan=0.0,
+                                        posinf=0.0, neginf=0.0)
+                lo, hi = minmax_fit(xtr_raw)
+                xtr = minmax_apply(xtr_raw, lo, hi)
+                ytr = tr["normalized_accuracy"].to_numpy(float)
+                fit_kw = {kk: vv for kk, vv in kw.items() if kk != "lambda_grid"}
+                grid = kw.get("lambda_grid")
+                if grid:
+                    rest = [q for q in cfg.task_names if q != t]
+                    fit_kw["l1_lambda"] = select_lambda_cv(
+                        [pair_subs[i] for i in tr_idx], xtr, ytr, base_cols,
+                        rest, grid, **fit_kw)
+                fit = fit_linear_l1(xtr, ytr, base_cols, **fit_kw)
+                train_rs.append(fit.train_r)
+
+                for agg_name, prefix in aggs:
+                    cols = [prefix + c if prefix + c in block.columns else c
+                            for c in base_cols]
+                    xb = np.nan_to_num(block.iloc[val_idx][cols].to_numpy(float),
+                                       nan=0.0, posinf=0.0, neginf=0.0)
+                    pred = minmax_apply(xb, lo, hi) @ fit.weights
+                    acc[agg_name][0][val_idx] += pred
+                    acc[agg_name][1][val_idx] += 1
+
+            row = {"method": method, "k": k, "n": len(block),
+                   "train_r": float(np.mean(train_rs)) if train_rs else float("nan")}
+            for agg_name, _ in aggs:
+                tot, cnt = acc[agg_name]
+                m = cnt > 0
+                if m.sum() < 3:
+                    row[f"r_{agg_name}"] = float("nan")
+                    continue
+                row[f"r_{agg_name}"] = _corr(tot[m] / cnt[m], y[m])
+            row["n_scored"] = int((acc["mean"][1] > 0).sum())
             rows.append(row)
             print(f"  [B] {method:<18} k={k}  "
                   f"mean r={row['r_mean']:+.3f}  min r={row['r_min']:+.3f}  "
