@@ -144,7 +144,7 @@ fig.savefig(OUT / "compact.pdf", bbox_inches="tight", pad_inches=0.01)
 plt.close(fig)
 print(f"  {OUT}/compact.pdf")
 
-fig, axes = plt.subplots(1, 2, figsize=(3.32, 0.94), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(3.32, 0.98), sharey=True)
 for ax, (b, lab) in zip(axes, (("clip", "ViT-B/32"), ("clip16", "ViT-B/16"))):
     ks = [2, 3, 4]; free = []; full = []; null = []
     for k in ks:
