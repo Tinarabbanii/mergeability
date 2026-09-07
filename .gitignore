@@ -31,7 +31,7 @@ __pycache__/
 
 
 # --- DO COMMIT ------------------------------------------------------------
-# src/  scripts/  configs/  tests/  pyproject.toml  uv.lock  README.md
+# src/  scripts/  configs/  pyproject.toml  uv.lock  README.md
 #
 # figures/ are small PNGs and worth having visible on GitHub, but only the
 # CLIP ones are results. Synthetic figures are test-harness output and must
