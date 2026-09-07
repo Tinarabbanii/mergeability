@@ -35,37 +35,22 @@ Every function takes a **list** of task vectors, never a pair, which is what mak
 uv sync
 ```
 
-The synthetic backend runs on CPU and needs nothing else. The two CLIP backends
-need checkpoints and datasets, neither redistributed here.
-
-**Datasets.** Eight classification sets. Five resolve through torchvision. Three
-do not: the torchvision Stanford Cars mirror is dead, RESISC45 was never in
-torchvision, and torchvision's SUN397 is the full 37 GB rather than the split we
-score on. The checker prints where to get each one.
-
 ```bash
+# 5 of 8 resolve through torchvision; Cars, SUN397 and RESISC45 need manual sourcing
 uv run python scripts/check_datasets.py
 ```
 
-**Checkpoints.** Fine-tuned CLIP encoders from the
-[Task Arithmetic release](https://github.com/mlfoundations/task_vectors),
-~430 MB each.
-
 ```bash
+# fine-tuned CLIP encoders, ~430 MB each, github.com/mlfoundations/task_vectors
 uv run python scripts/download_checkpoints.py --convert /path/to/ViT-B-32
 ```
 
-Device is picked automatically: CUDA, then MPS, then CPU.
-
 ```bash
-uv run python scripts/run_all.py                    # synthetic harness, ~7 min
-uv run python scripts/run_all.py --backend clip     # ViT-B/32, the benchmark
-uv run python scripts/run_all.py --backend clip16   # ViT-B/16, the replication
+uv run python scripts/run_all.py                        # synthetic harness, CPU, ~7 min
+uv run python scripts/run_all.py --backend clip         # ViT-B/32, the benchmark
+uv run python scripts/run_all.py --backend clip16       # ViT-B/16, the replication
+uv run python scripts/run_all.py --backend clip --quick # skip sweep, calibration, checks
 ```
-
-Each backend writes to its own `artifacts/<backend>/`, and every analysis refuses
-to load results produced under a different backend or task count. Add `--quick`
-to skip the density sweep, the calibration study and the statistical checks.
 
 <details>
 <summary>or step by step</summary>
